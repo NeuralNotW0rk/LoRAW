@@ -1,0 +1,4 @@
+input/
+models/
+scripts/wandb/
+scripts/artifacts/
