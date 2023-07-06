@@ -1,4 +1,6 @@
 input/
+output/
 models/
-scripts/wandb/
-scripts/artifacts/
+wandb/
+artifacts/
+__pycache__/
