@@ -43,7 +43,7 @@ class AudioLoRAModule(torch.nn.Module):
             stride = orig_module.stride
             padding = orig_module.padding
             self.lora_down = torch.nn.Conv1d(in_dim, self.lora_dim, kernel_size, stride, padding, bias=False)
-            self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, (1, 1), (1, 1), bias=False)
+            self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, 1, 1, bias=False)
         else:
             in_dim = orig_module.in_features
             out_dim = orig_module.out_features
@@ -122,10 +122,10 @@ class AudioLoRANetwork(torch.nn.Module):
         def create_modules(
                 root_module: torch.nn.Module,
                 target_replace_modules
-        ) -> List[AudioLoRAModule]:
+        ) -> torch.nn.ModuleList:
             prefix = AudioLoRANetwork.LORA_PREFIX_UNET
-            loras = []
-            skipped = []
+            loras = torch.nn.ModuleList()
+            skipped = torch.nn.ModuleList()
             for name, module in root_module.named_modules():
                 if module.__class__.__name__ in target_replace_modules:
                     for child_name, child_module in module.named_modules():
