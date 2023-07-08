@@ -135,16 +135,13 @@ class AudioLoRANetwork(torch.nn.Module):
                         if is_linear or is_conv1d:
                             lora_name = prefix + "." + name + "." + child_name
                             lora_name = lora_name.replace(".", "_")
-                            
-                            dim = 4
-                            alpha = 1
 
                             lora = module_class(
                                 lora_name,
                                 child_module,
                                 self.multiplier,
-                                dim,
-                                alpha  
+                                self.lora_dim,
+                                self.alpha  
                             )
                             loras.append(lora)
             return loras, skipped
