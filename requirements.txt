@@ -1,0 +1,9 @@
+einops
+pandas
+prefigure
+scipy
+wandb
+torch
+torchaudio
+pytorch_lightning
+git+https://github.com/diontimmer/sample-diffusion-lib
