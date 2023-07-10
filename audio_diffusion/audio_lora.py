@@ -8,10 +8,7 @@ import os
 from typing import List, Tuple, Union
 import numpy as np
 import torch
-import re
 
-
-RE_UPDOWN = re.compile(r"(up|down)_blocks_(\d+)_(resnets|upsamplers|downsamplers|attentions)_(\d+)_")
 
 class AudioLoRAModule(torch.nn.Module):
 
@@ -100,13 +97,14 @@ class AudioLoRAModule(torch.nn.Module):
 
 class AudioLoRANetwork(torch.nn.Module):
     NUM_OF_BLOCKS = 12
-
+    # Only target self attention blocks by default
     UNET1D_TARGET_REPLACE_MODULE = ['SelfAttention1d']
     LORA_PREFIX_UNET = "lora_unet"
     
     def __init__(
             self,
             unet,
+            target_modules=UNET1D_TARGET_REPLACE_MODULE,
             multiplier=1.0,
             lora_dim=4,
             alpha=1,
@@ -146,11 +144,9 @@ class AudioLoRANetwork(torch.nn.Module):
                             loras.append(lora)
             return loras, skipped
         
-        target_modules = AudioLoRANetwork.UNET1D_TARGET_REPLACE_MODULE
         self.unet_loras, skipped = create_modules(unet, target_modules)
         print(f"create LoRA for U-Net1D: {len(self.unet_loras)} modules.")
         
-        skipped
         if verbose and len(skipped) > 0:
             print(
                 f"because block_lr_weight is 0 or dim (rank) is 0, {len(skipped)} LoRA modules are skipped / block_lr_weightまたはdim (rank)が0の為、次の{len(skipped)}個のLoRAモジュールはスキップされます:"

@@ -28,6 +28,7 @@ sys.path.append(os.getcwd())
 from dataset.dataset import SampleDataset
 from audio_diffusion.models import DiffusionAttnUnet1D
 from audio_diffusion.utils import ema_update
+from audio_diffusion.audio_lora import AudioLoRAModule, AudioLoRANetwork
 from viz.viz import audio_spectrogram_image
 
 
@@ -92,7 +93,7 @@ def sample(model, x, steps, eta):
 
 
 
-class DiffusionUncond(pl.LightningModule):
+class DiffusionUncondLora(pl.LightningModule):
     def __init__(self, global_args):
         super().__init__()
 
@@ -100,13 +101,12 @@ class DiffusionUncond(pl.LightningModule):
         self.diffusion_ema = deepcopy(self.diffusion)
         self.rng = torch.quasirandom.SobolEngine(1, scramble=True, seed=global_args.seed)
         self.ema_decay = global_args.ema_decay
-        self.lora_model = None
+        self.lora = None
 
     def configure_optimizers(self):
-        if self.lora_model is None:
+        if self.lora is None:
             return optim.Adam([*self.diffusion.parameters()], lr=4e-5)
-        else:
-            return optim.Adam([*self.lora_model.parameters()], lr=4e-3)
+        return optim.Adam([*self.lora.parameters()], lr=4e-3)
     
     def training_step(self, batch, batch_idx):
         reals = batch[0]
@@ -141,7 +141,48 @@ class DiffusionUncond(pl.LightningModule):
 
     def on_before_zero_grad(self, *args, **kwargs):
         decay = 0.95 if self.current_epoch < 25 else self.ema_decay
-        ema_update(self.diffusion, self.diffusion_ema, decay)
+        if self.lora is None:
+            ema_update(self.diffusion, self.diffusion_ema, decay)
+        else:
+            ema_update(self.lora, self.lora_ema, decay)
+
+    def inject_new_lora(
+        self,
+        target_modules=[
+            'SelfAttention1d',
+            'ResConvBlock'
+        ],
+        multiplier=1.0,
+        lora_dim=4,
+        alpha=1,
+        module_class=AudioLoRAModule,
+        verbose=False
+    ):
+
+        # Create and inject lora
+        self.lora = AudioLoRANetwork(
+            self.diffusion,
+            target_modules=target_modules,
+            multiplier=multiplier,
+            lora_dim=lora_dim,
+            alpha=alpha,
+            module_class=module_class,
+            verbose=verbose
+        )
+        #self.lora.to(device=self.diffusion.device)
+        self.lora.apply_to()
+
+        # Freeze main diffusion model
+        self.diffusion.requires_grad_(False)
+        self.lora.requires_grad_(True)
+
+        # Re-init optimizer to use lora parameters
+        self.configure_optimizers()
+
+        # Replace ema model
+        del self.diffusion_ema
+        self.lora_ema = deepcopy(self.lora)
+
 
 class ExceptionCallback(pl.Callback):
     def on_exception(self, trainer, module, err):
@@ -171,7 +212,8 @@ class DemoCallback(pl.Callback):
         noise = torch.randn([self.num_demos, 2, self.demo_samples]).to(module.device)
 
         try:
-            fakes = sample(module.diffusion_ema, noise, self.demo_steps, 0)
+            # TODO: was changed from diffusion_ema to diffusion - maybe temporarily inject lora_ema into diffusion
+            fakes = sample(module.diffusion, noise, self.demo_steps, 0)
 
             # Put the demos together
             fakes = rearrange(fakes, 'b d n -> d (b n)')
@@ -234,7 +276,7 @@ def main():
     ckpt_callback = pl.callbacks.ModelCheckpoint(every_n_train_steps=args.checkpoint_every, save_top_k=-1, dirpath=save_path)
     demo_callback = DemoCallback(args)
 
-    diffusion_model = DiffusionUncond(args)
+    diffusion_model = DiffusionUncondLora(args)
 
     wandb_logger.watch(diffusion_model)
     push_wandb_config(wandb_logger, args)
