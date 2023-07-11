@@ -169,7 +169,7 @@ class DiffusionUncondLora(pl.LightningModule):
             module_class=module_class,
             verbose=verbose
         )
-        #self.lora.to(device=self.diffusion.device)
+        self.lora.to(device=self.device)
         self.lora.apply_to()
 
         # Freeze main diffusion model
