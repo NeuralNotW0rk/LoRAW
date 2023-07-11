@@ -109,6 +109,7 @@ class AudioLoRANetwork(torch.nn.Module):
         multiplier=1.0,
         lora_dim=4,
         alpha=1,
+        dropout=None,
         module_class=AudioLoRAModule,
         verbose=False,
     ):
@@ -137,9 +138,10 @@ class AudioLoRANetwork(torch.nn.Module):
                             lora = module_class(
                                 lora_name,
                                 child_module,
-                                self.multiplier,
-                                self.lora_dim,
-                                self.alpha,
+                                multiplier=self.multiplier,
+                                lora_dim=self.lora_dim,
+                                alpha=self.alpha,
+                                dropout=self.dropout
                             )
                             loras.append(lora)
             return loras, skipped

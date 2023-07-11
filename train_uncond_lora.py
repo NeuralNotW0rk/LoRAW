@@ -168,6 +168,7 @@ class DiffusionUncondLora(pl.LightningModule):
         multiplier=1.0,
         lora_dim=4,
         alpha=1,
+        dropout=None,
         module_class=AudioLoRAModule,
         verbose=False
     ):
@@ -179,6 +180,7 @@ class DiffusionUncondLora(pl.LightningModule):
             multiplier=multiplier,
             lora_dim=lora_dim,
             alpha=alpha,
+            dropout=dropout,
             module_class=module_class,
             verbose=verbose
         )
