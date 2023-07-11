@@ -105,9 +105,20 @@ class DiffusionUncondLora(pl.LightningModule):
         self.lora = None
 
     def configure_optimizers(self):
+        opt = None
         if self.lora is None:
-            return optim.Adam([*self.diffusion.parameters()], lr=self.lr)
-        return optim.AdamW([*self.lora.parameters()], lr=self.lr)
+            opt = optim.Adam([*self.diffusion.parameters()], lr=self.lr)
+        else: 
+            opt = optim.AdamW([*self.lora.parameters()], lr=self.lr)
+        lr_scheduler = optim.lr_scheduler.LinearLR(
+            opt,
+            start_factor=1.0,
+            end_factor=0.1,
+            total_iters=100,
+            verbose=True
+        )
+        return {'optimizer': opt, 'lr_scheduler': lr_scheduler}
+        
     
     def training_step(self, batch, batch_idx):
         reals = batch[0]
@@ -151,9 +162,7 @@ class DiffusionUncondLora(pl.LightningModule):
         self,
         target_modules=[
             'SelfAttention1d',
-            'ResConvBlock',
-            'Downsample1d',
-            'Upsample1d'
+            'ResConvBlock'
         ],
         multiplier=1.0,
         lora_dim=4,

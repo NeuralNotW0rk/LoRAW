@@ -4,9 +4,7 @@
 # https://github.com/cloneofsimo/lora/blob/master/lora_diffusion/lora.py
 
 import math
-import os
-from typing import List, Tuple, Union
-import numpy as np
+from typing import List
 import torch
 
 
@@ -48,10 +46,10 @@ class AudioLoRAModule(torch.nn.Module):
             self.lora_up = torch.nn.Linear(self.lora_dim, out_dim, bias=False)
 
         if type(alpha) == torch.Tensor:
-            alpha = alpha.detach().float().numpy()  # without casting, bf16 causes error
+            alpha = alpha.detach().float().numpy()
         alpha = self.lora_dim if alpha is None or alpha == 0 else alpha
         self.scale = alpha / self.lora_dim
-        self.register_buffer("alpha", torch.tensor(alpha))  # 定数として扱える
+        self.register_buffer("alpha", torch.tensor(alpha))
 
         # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
