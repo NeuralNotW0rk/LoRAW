@@ -114,7 +114,6 @@ class DiffusionUncondLora(pl.LightningModule):
             opt,
             start_factor=1.0,
             end_factor=0.1,
-            total_iters=100,
             verbose=True
         )
         return {'optimizer': opt, 'lr_scheduler': lr_scheduler}
