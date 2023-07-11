@@ -5,3 +5,4 @@ wandb/
 artifacts/
 __pycache__/
 training_demos/
+*.pt
