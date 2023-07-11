@@ -107,7 +107,7 @@ class DiffusionUncondLora(pl.LightningModule):
     def configure_optimizers(self):
         if self.lora is None:
             return optim.Adam([*self.diffusion.parameters()], lr=self.lr)
-        return optim.Adam([*self.lora.parameters()], lr=self.lr)
+        return optim.AdamW([*self.lora.parameters()], lr=self.lr)
     
     def training_step(self, batch, batch_idx):
         reals = batch[0]
