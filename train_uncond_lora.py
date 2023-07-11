@@ -101,12 +101,13 @@ class DiffusionUncondLora(pl.LightningModule):
         self.diffusion_ema = deepcopy(self.diffusion)
         self.rng = torch.quasirandom.SobolEngine(1, scramble=True, seed=global_args.seed)
         self.ema_decay = global_args.ema_decay
+        self.lr = global_args.lr
         self.lora = None
 
     def configure_optimizers(self):
         if self.lora is None:
-            return optim.Adam([*self.diffusion.parameters()], lr=4e-5)
-        return optim.Adam([*self.lora.parameters()], lr=4e-3)
+            return optim.Adam([*self.diffusion.parameters()], lr=self.lr)
+        return optim.Adam([*self.lora.parameters()], lr=self.lr)
     
     def training_step(self, batch, batch_idx):
         reals = batch[0]
