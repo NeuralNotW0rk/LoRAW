@@ -185,7 +185,7 @@ class AudioLoRANetwork(torch.nn.Module):
     def is_mergeable(self):
         return True
 
-    def save_weights(self, file, dtype):
+    def save_weights(self, file, dtype=torch.float16):
 
         state_dict = self.state_dict()
 
