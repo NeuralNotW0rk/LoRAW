@@ -64,18 +64,18 @@ class AudioLoRAModule(torch.nn.Module):
         orig_forwarded = self.orig_forward(x)
 
         # module dropout
-        if self.module_dropout is not None and self.training:
+        if self.module_dropout is not None:
             if torch.rand(1) < self.module_dropout:
                 return orig_forwarded
 
         lx = self.lora_down(x)
 
         # normal dropout
-        if self.dropout is not None and self.training:
+        if self.dropout is not None:
             lx = torch.nn.functional.dropout(lx, p=self.dropout)
 
         # rank dropout
-        if self.rank_dropout is not None and self.training:
+        if self.rank_dropout is not None:
             mask = (
                 torch.rand((lx.size(0), self.lora_dim), device=lx.device)
                 > self.rank_dropout
