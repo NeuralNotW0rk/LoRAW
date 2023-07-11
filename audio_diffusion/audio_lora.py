@@ -102,15 +102,12 @@ class AudioLoRAModule(torch.nn.Module):
 
 
 class AudioLoRANetwork(torch.nn.Module):
-    NUM_OF_BLOCKS = 12
-    # Only target self attention blocks by default
-    UNET1D_TARGET_REPLACE_MODULE = ['SelfAttention1d', 'ResConvBlock']
     LORA_PREFIX_UNET = 'lora_unet'
 
     def __init__(
         self,
         unet,
-        target_modules=UNET1D_TARGET_REPLACE_MODULE,
+        target_modules=['SelfAttention1d'],
         multiplier=1.0,
         lora_dim=4,
         alpha=1,

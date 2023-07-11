@@ -151,7 +151,9 @@ class DiffusionUncondLora(pl.LightningModule):
         self,
         target_modules=[
             'SelfAttention1d',
-            'ResConvBlock'
+            'ResConvBlock',
+            'Downsample1d',
+            'Upsample1d'
         ],
         multiplier=1.0,
         lora_dim=4,
