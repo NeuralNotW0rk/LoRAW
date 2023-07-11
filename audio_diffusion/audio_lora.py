@@ -118,6 +118,7 @@ class AudioLoRANetwork(torch.nn.Module):
         self.multiplier = multiplier
         self.lora_dim = lora_dim
         self.alpha = alpha
+        self.dropout = dropout
 
         def create_modules(
             root_module: torch.nn.Module, target_replace_modules
