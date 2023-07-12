@@ -221,8 +221,8 @@ class DemoCallback(pl.Callback):
     @torch.no_grad()
     #def on_train_epoch_end(self, trainer, module):
     def on_train_batch_end(self, trainer, module, outputs, batch, batch_idx):        
-        if self.lora is not None:
-            self.lora.eval()
+        if module.lora is not None:
+            module.lora.eval()
 
         if (trainer.global_step - 1) % self.demo_every != 0 or self.last_demo_step == trainer.global_step:
             return
