@@ -102,7 +102,6 @@ class DiffusionUncondLora(pl.LightningModule):
         self.rng = torch.quasirandom.SobolEngine(1, scramble=True, seed=global_args.seed)
         self.ema_decay = global_args.ema_decay
         self.lr = global_args.lr
-        self.lr_steps = global_args.lr_steps
         self.lora = None
 
     def configure_optimizers(self):
@@ -111,14 +110,7 @@ class DiffusionUncondLora(pl.LightningModule):
             opt = optim.Adam([*self.diffusion.parameters()], lr=self.lr)
         else: 
             opt = optim.AdamW([*self.lora.parameters()], lr=self.lr)
-        lr_scheduler = optim.lr_scheduler.LinearLR(
-            opt,
-            start_factor=1.0,
-            end_factor=0.1,
-            total_iters=self.lr_steps,
-            verbose=True
-        )
-        return {'optimizer': opt, 'lr_scheduler': lr_scheduler}
+        return opt
         
     
     def training_step(self, batch, batch_idx):
