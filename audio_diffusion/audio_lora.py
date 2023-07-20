@@ -105,7 +105,10 @@ class AudioLoRANetwork(torch.nn.Module):
     def __init__(
         self,
         unet,
-        target_modules=['SelfAttention1d'],
+        target_modules=[
+            'SelfAttention1d',
+            'ResConvBlock'
+        ],
         multiplier=1.0,
         lora_dim=4,
         alpha=1,
