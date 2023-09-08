@@ -206,7 +206,7 @@ class DemoCallback(pl.Callback):
         self.sample_rate = global_args.sample_rate
         self.last_demo_step = -1
         self.step_offset = 0
-        if global_args.step_offset:
+        if hasattr(global_args, 'step_offset'):
             self.step_offset = global_args.step_offset
 
     @rank_zero_only
