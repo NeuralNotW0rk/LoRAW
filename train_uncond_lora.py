@@ -205,6 +205,9 @@ class DemoCallback(pl.Callback):
         self.demo_steps = global_args.demo_steps
         self.sample_rate = global_args.sample_rate
         self.last_demo_step = -1
+        self.step_offset = 0
+        if global_args.step_offset:
+            self.step_offset = global_args.step_offset
 
     @rank_zero_only
     @torch.no_grad()
@@ -242,7 +245,7 @@ class DemoCallback(pl.Callback):
         
             log_dict[f'demo_melspec_left'] = wandb.Image(audio_spectrogram_image(fakes))
 
-            trainer.logger.experiment.log(log_dict, step=trainer.global_step)
+            trainer.logger.experiment.log(log_dict, step=trainer.global_step + self.step_offset)
         except Exception as e:
             print(f'{type(e).__name__}: {e}', file=sys.stderr)
 
