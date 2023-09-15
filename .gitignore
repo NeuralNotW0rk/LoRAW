@@ -1,8 +1,6 @@
-input/
-output/
-models/
-loras/
 wandb/
 artifacts/
+debug/
 __pycache__/
-training_demos/
+*.wav
+*.ckpt
