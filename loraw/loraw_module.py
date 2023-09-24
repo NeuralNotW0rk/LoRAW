@@ -2,6 +2,7 @@ import math
 import torch
 from torch import nn
 
+
 class LoRAWModule(nn.Module):
     def __init__(
         self,
@@ -28,7 +29,7 @@ class LoRAWModule(nn.Module):
 
         module_type = orig_module.__class__.__name__
 
-        if  module_type == "Conv1d":
+        if module_type == "Conv1d":
             in_dim = orig_module.in_channels
             out_dim = orig_module.out_channels
             kernel_size = orig_module.kernel_size
@@ -38,7 +39,7 @@ class LoRAWModule(nn.Module):
                 in_dim, self.lora_dim, kernel_size, stride, padding, bias=False
             )
             self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, 1, 1, bias=False)
-        else:
+        elif module_type == "Linear":
             in_dim = orig_module.in_features
             out_dim = orig_module.out_features
             self.lora_down = torch.nn.Linear(in_dim, self.lora_dim, bias=False)
@@ -50,11 +51,10 @@ class LoRAWModule(nn.Module):
         self.scale = alpha / self.lora_dim
         self.register_buffer("alpha", torch.tensor(alpha))
 
-        # same as microsoft's
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         torch.nn.init.zeros_(self.lora_up.weight)
 
-    def apply_to(self):
+    def activate(self):
         self.orig_forward = self.orig_module.forward
         self.orig_module.forward = self.forward
         del self.orig_module
