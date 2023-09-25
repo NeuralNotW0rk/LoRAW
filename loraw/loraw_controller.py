@@ -5,9 +5,8 @@ from .loraw_network import LoRAWNetwork
 from .loraw_module import LoRAWModule
 
 class LoRAWController:
-    def __init__(self, target_model, target_config) -> None:
+    def __init__(self, target_model) -> None:
         self.target_model = target_model
-        self.target_config = target_config
 
         self.lr = 0
         self.lora_ema = None
@@ -37,7 +36,7 @@ class LoRAWController:
     def on_before_zero_grad_patched(self, *args, **kwargs):
         self.lora_ema.update()
 
-    def prepare_training(self, training_wrapper=None):
+    def prepare_trainer(self, training_wrapper=None):
             # Freeze main diffusion model
             self.target_model.requires_grad_(False)
             self.lora.requires_grad_(True)
