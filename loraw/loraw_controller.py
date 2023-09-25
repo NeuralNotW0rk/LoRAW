@@ -29,19 +29,15 @@ class LoRAWController:
             module_class=LoRAWModule,
             verbose=False,
         )
+        self.lora.activate()
 
     def configure_optimizer_patched(self):
         return optim.Adam([*self.lora.parameters()], lr=self.lr)
 
     def on_before_zero_grad_patched(self, *args, **kwargs):
         self.lora_ema.update()
-    
-    def activate(self, training_wrapper=None):
-        #self.lora.to(device=self.target_model.device)
-        self.lora.activate()
 
-        if training_wrapper is not None:
-
+    def prepare_training(self, training_wrapper=None):
             # Freeze main diffusion model
             self.target_model.requires_grad_(False)
             self.lora.requires_grad_(True)
@@ -51,11 +47,4 @@ class LoRAWController:
             training_wrapper.configure_optimizers = self.configure_optimizer_patched
 
             # Replace ema update
-            self.lora_ema = EMA(
-                self.lora,
-                beta=0.9999,
-                power=3/4,
-                update_every=1,
-                update_after_step=1
-            )
-            training_wrapper.on_before_zero_grad = self.on_before_zero_grad_patched
+            # training_wrapper.on_before_zero_grad = self.on_before_zero_grad_patched

@@ -40,7 +40,7 @@ class LoRAWNetwork(nn.Module):
                         is_conv1d = child_module.__class__.__name__ == "Conv1d"
 
                         if is_linear or is_conv1d:
-                            lora_name = "lora.{root_name}.{name}.{child_name}"
+                            lora_name = f"lora.{root_name}.{name}.{child_name}"
                             lora_name = lora_name.replace(".", "_")
 
                             lora = module_class(
