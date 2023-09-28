@@ -26,7 +26,7 @@ class LoRAWController:
             dropout=dropout,
             multiplier=1.0,
             module_class=LoRAWModule,
-            verbose=False,
+            verbose=False
         )
         self.lora.activate()
 
@@ -36,7 +36,10 @@ class LoRAWController:
     def on_before_zero_grad_patched(self, *args, **kwargs):
         self.lora_ema.update()
 
-    def prepare_trainer(self, training_wrapper=None):
+    def prepare_training(self, training_wrapper):
+            # Move lora to training device
+            self.lora.to(device=training_wrapper.device)
+
             # Freeze main diffusion model
             self.target_model.requires_grad_(False)
             self.lora.requires_grad_(True)
