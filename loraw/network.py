@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from typing import List
 
-from .loraw_module import LoRAWModule
+from .module import LoRAWModule
 
 class LoRAWNetwork(nn.Module):
     def __init__(

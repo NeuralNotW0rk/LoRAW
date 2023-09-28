@@ -1,8 +1,8 @@
 from torch import optim
 from ema_pytorch import EMA
 
-from .loraw_network import LoRAWNetwork
-from .loraw_module import LoRAWModule
+from .network import LoRAWNetwork
+from .module import LoRAWModule
 
 class LoRAWController:
     def __init__(self, target_model) -> None:

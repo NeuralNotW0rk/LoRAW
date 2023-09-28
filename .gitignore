@@ -4,3 +4,4 @@ debug/
 __pycache__/
 *.wav
 *.ckpt
+*.egg-info/
