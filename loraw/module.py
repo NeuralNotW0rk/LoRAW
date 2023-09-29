@@ -8,7 +8,6 @@ class LoRAWModule(nn.Module):
         self,
         lora_name,
         target_module: nn.Module,
-        parent_module: nn.Module,
         multiplier=1.0,
         lora_dim=16,
         alpha=1.0,
@@ -21,7 +20,7 @@ class LoRAWModule(nn.Module):
         self.lora_dim = lora_dim
         self.multiplier = multiplier
         self.target_module = target_module
-        self.parent_module = parent_module
+        self.target_forward = target_module.forward
         self.dropout = dropout
         self.rank_dropout = rank_dropout
         self.module_dropout = module_dropout
@@ -34,14 +33,14 @@ class LoRAWModule(nn.Module):
     def forward(self, x):
         lx = self.lora_down(x)
         lx = self.lora_up(lx)
-        return self.target_module(x) + lx * self.scale * self.multiplier
-    
-    def inject(self):
-        self.parent_module._modules[self.lora_name.split('/')[-1]] = self
-        # Reference to parent must be deleted to prevent an infinite loop of submodules
-        del self.parent_module
+        return self.target_forward(x) + lx * self.scale * self.multiplier
 
+    def inject(self, parent_module):
+        parent_module._modules[self.lora_name.split('/')[-1]] = self
 
+    def inject_forward(self):
+        self.target_module.forward = self.forward
+        del self.target_module
 
 
 class LoRAWLinear(LoRAWModule):
@@ -49,7 +48,6 @@ class LoRAWLinear(LoRAWModule):
         self,
         lora_name,
         target_module: nn.Module,
-        parent_module: nn.Module,
         multiplier=1,
         lora_dim=16,
         alpha=1,
@@ -60,7 +58,6 @@ class LoRAWLinear(LoRAWModule):
         super().__init__(
             lora_name,
             target_module,
-            parent_module,
             multiplier,
             lora_dim,
             alpha,
@@ -79,7 +76,6 @@ class LoRAWConv1d(LoRAWModule):
         self,
         lora_name,
         target_module: nn.Module,
-        parent_module: nn.Module,
         multiplier=1,
         lora_dim=16,
         alpha=1,
