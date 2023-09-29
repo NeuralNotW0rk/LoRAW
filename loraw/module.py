@@ -7,6 +7,111 @@ class LoRAWModule(nn.Module):
     def __init__(
         self,
         lora_name,
+        target_module: nn.Module,
+        parent_module: nn.Module,
+        multiplier=1.0,
+        lora_dim=16,
+        alpha=1.0,
+        dropout=None,
+        rank_dropout=None,
+        module_dropout=None,
+    ):
+        super().__init__()
+        self.lora_name = lora_name
+        self.lora_dim = lora_dim
+        self.multiplier = multiplier
+        self.target_module = target_module
+        self.parent_module = parent_module
+        self.dropout = dropout
+        self.rank_dropout = rank_dropout
+        self.module_dropout = module_dropout
+
+        if type(alpha) == torch.Tensor:
+            alpha = alpha.detach().float().numpy()
+        alpha = self.lora_dim if alpha is None or alpha == 0 else alpha
+        self.scale = alpha / self.lora_dim
+
+    def forward(self, x):
+        lx = self.lora_down(x)
+        lx = self.lora_up(lx)
+        return self.target_module(x) + lx * self.scale * self.multiplier
+    
+    def inject(self):
+        self.parent_module._modules[self.lora_name.split('/')[-1]] = self
+        # Reference to parent must be deleted to prevent an infinite loop of submodules
+        del self.parent_module
+
+
+
+
+class LoRAWLinear(LoRAWModule):
+    def __init__(
+        self,
+        lora_name,
+        target_module: nn.Module,
+        parent_module: nn.Module,
+        multiplier=1,
+        lora_dim=16,
+        alpha=1,
+        dropout=None,
+        rank_dropout=None,
+        module_dropout=None,
+    ):
+        super().__init__(
+            lora_name,
+            target_module,
+            parent_module,
+            multiplier,
+            lora_dim,
+            alpha,
+            dropout,
+            rank_dropout,
+            module_dropout,
+        )
+        in_dim = target_module.in_features
+        out_dim = target_module.out_features
+        self.lora_down = torch.nn.Linear(in_dim, self.lora_dim, bias=False)
+        self.lora_up = torch.nn.Linear(self.lora_dim, out_dim, bias=False)
+
+
+class LoRAWConv1d(LoRAWModule):
+    def __init__(
+        self,
+        lora_name,
+        target_module: nn.Module,
+        parent_module: nn.Module,
+        multiplier=1,
+        lora_dim=16,
+        alpha=1,
+        dropout=None,
+        rank_dropout=None,
+        module_dropout=None,
+    ):
+        super().__init__(
+            lora_name,
+            target_module,
+            parent_module,
+            multiplier,
+            lora_dim,
+            alpha,
+            dropout,
+            rank_dropout,
+            module_dropout,
+        )
+        in_dim = target_module.in_channels
+        out_dim = target_module.out_channels
+        kernel_size = target_module.kernel_size
+        stride = target_module.stride
+        padding = target_module.padding
+        self.lora_down = torch.nn.Conv1d(
+            in_dim, self.lora_dim, kernel_size, stride, padding, bias=False
+        )
+        self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, 1, 1, bias=False)
+
+class LoRAWModuleForward(nn.Module):
+    def __init__(
+        self,
+        lora_name,
         orig_module: nn.Module,
         multiplier=1.0,
         lora_dim=16,

@@ -1,34 +1,47 @@
+from torch import nn
 from torch import optim
 from ema_pytorch import EMA
 
 from .network import LoRAWNetwork
-from .module import LoRAWModule
+#from .module import LoRAWModule
 
 class LoRAWController:
-    def __init__(self, target_model) -> None:
-        self.target_model = target_model
-
+    def __init__(self) -> None:
         self.lr = 0
         self.lora_ema = None
 
-    def create_diffuser_lora(
+    def create_loraw(
         self,
+        target_model,
+        target_blocks=["Attention"],
+        component_whitelist=["downsamples", "upsamples"],
         lora_dim=16,
-        alpha=1,
+        alpha=1.0,
         dropout=None,
+        multiplier=1.0
     ):
         self.lora = LoRAWNetwork(
-            net=self.target_model,
-            target_subnets=["downsamples", "upsamples"],
-            target_modules=["Attention"],
+            target_model,
+            target_blocks=target_blocks,
+            component_whitelist=component_whitelist,
             lora_dim=lora_dim,
             alpha=alpha,
             dropout=dropout,
-            multiplier=1.0,
-            module_class=LoRAWModule,
-            verbose=False
+            multiplier=multiplier,
         )
-        self.lora.activate()
+
+    def scan_model(self, model, target_blocks=['attention'], target_components=None):
+        names = []
+        modules = []
+        for name, module in model.named_modules():
+            if module.__class__.__name__ in target_blocks:
+                for child_name, child_module in module.named_modules():
+
+                    if child_module.__class__.__name__ in ['Linear', 'Conv1d']:
+                        names.append(child_name)
+                        modules.append(child_module)
+        return zip(names, modules)
+         
 
     def configure_optimizer_patched(self):
         return optim.Adam([*self.lora.parameters()], lr=self.lr)
