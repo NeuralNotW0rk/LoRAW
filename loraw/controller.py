@@ -34,8 +34,6 @@ def scan_model(model, target_blocks, whitelist=None, blacklist=None):
 class LoRAWController:
     def __init__(self) -> None:
         self.lora_nets = {}
-        self.lr = 0
-        self.lora_ema = None
 
     def create_loraw(
         self,
@@ -75,6 +73,6 @@ class LoRAWController:
 
         # Replace optimizer to use lora parameters
         def configure_optimizer_patched(self):
-            return optim.Adam([*self.lora_net[id]['lora_net'].parameters()], lr=training_werapper.lr)
+            return optim.Adam([*self.lora_net[id]['lora_net'].parameters()], lr=training_wrapper.lr)
 
-        training_wrapper.configure_optimizers = configure_optimizer_patched
+        training_wrapper.configure_optimizers = self.configure_optimizer_patched
