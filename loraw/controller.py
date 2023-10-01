@@ -48,17 +48,19 @@ class LoRAWController:
         dropout=None,
         multiplier=1.0,
     ):
-        self.lora_nets[id]['target_model'] = target_model
-        self.lora_nets[id]['target_map'] = scan_model(
+        lora_dict = {}
+        lora_dict['target_model'] = target_model
+        lora_dict['target_map'] = scan_model(
             target_model, target_blocks, whitelist=component_whitelist
         )
-        self.lora_nets[id]['lora_net'] = LoRAWNetwork(
-            self.target_map,
+        lora_dict['lora_net'] = LoRAWNetwork(
+            lora_dict['target_map'],
             lora_dim=lora_dim,
             alpha=alpha,
             dropout=dropout,
             multiplier=multiplier,
         )
+        self.lora_nets[id] = lora_dict
 
     def activate(self, id):
         self.lora_nets[id]['lora_net'].activate(self.lora_nets[id]['target_map'])
