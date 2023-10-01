@@ -9,13 +9,14 @@ class LoRAWNetwork(nn.Module):
     def __init__(
         self,
         target_map,
+        id,
         multiplier=1.0,
         lora_dim=4,
         alpha=1,
         dropout=None,
     ):
         super().__init__()
-
+        self.id = id
         self.multiplier = multiplier
         self.lora_dim = lora_dim
         self.alpha = alpha

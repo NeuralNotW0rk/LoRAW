@@ -33,11 +33,13 @@ def scan_model(model, target_blocks, whitelist=None, blacklist=None):
 
 class LoRAWController:
     def __init__(self) -> None:
+        self.lora_nets = {}
         self.lr = 0
         self.lora_ema = None
 
     def create_loraw(
         self,
+        id,
         target_model,
         target_blocks=["Attention"],
         component_whitelist=["downsamples", "upsamples"],
@@ -46,10 +48,11 @@ class LoRAWController:
         dropout=None,
         multiplier=1.0,
     ):
-        self.target_map = scan_model(
+        self.lora_nets[id]['target_model'] = target_model
+        self.lora_nets[id]['target_map'] = scan_model(
             target_model, target_blocks, whitelist=component_whitelist
         )
-        self.lora = LoRAWNetwork(
+        self.lora_nets[id]['lora_net'] = LoRAWNetwork(
             self.target_map,
             lora_dim=lora_dim,
             alpha=alpha,
@@ -57,26 +60,19 @@ class LoRAWController:
             multiplier=multiplier,
         )
 
-    def activate(self):
-        self.lora.activate(self.target_map)
+    def activate(self, id):
+        self.lora_nets[id]['lora_net'].activate(self.lora_nets[id]['target_map'])
 
-    def configure_optimizer_patched(self):
-        return optim.Adam([*self.lora.parameters()], lr=self.lr)
-
-    def on_before_zero_grad_patched(self, *args, **kwargs):
-        self.lora_ema.update()
-
-    def prepare_training(self, training_wrapper):
+    def prepare_training(self, id, training_wrapper):
         # Move lora to training device
-        self.lora.to(device=training_wrapper.device)
+        self.lora_nets[id]['lora_net'].to(device=training_wrapper.device)
 
         # Freeze main diffusion model
-        self.target_model.requires_grad_(False)
-        self.lora.requires_grad_(True)
+        self.lora_nets[id]['target_model'].requires_grad_(False)
+        self.lora_nets[id]['lora_net'].requires_grad_(True)
 
         # Replace optimizer to use lora parameters
-        self.lr = training_wrapper.lr
-        training_wrapper.configure_optimizers = self.configure_optimizer_patched
+        def configure_optimizer_patched(self):
+            return optim.Adam([*self.lora_net[id]['lora_net'].parameters()], lr=training_werapper.lr)
 
-        # Replace ema update
-        # training_wrapper.on_before_zero_grad = self.on_before_zero_grad_patched
+        training_wrapper.configure_optimizers = configure_optimizer_patched
