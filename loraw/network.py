@@ -125,7 +125,7 @@ class LoRAWWrapper:
             self.lr = training_wrapper.lr
         else:
             self.lr = lr
-        training_wrapper.configure_optimizers = self.configure_optimizers_patched()
+        training_wrapper.configure_optimizers = self.configure_optimizers()
         self.trainable = True
 
 
