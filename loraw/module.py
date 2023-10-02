@@ -69,6 +69,9 @@ class LoRAWLinear(LoRAWModule):
         out_dim = original_module.out_features
         self.lora_down = torch.nn.Linear(in_dim, self.lora_dim, bias=False)
         self.lora_up = torch.nn.Linear(self.lora_dim, out_dim, bias=False)
+        
+        torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
+        torch.nn.init.zeros_(self.lora_up.weight)
 
 
 class LoRAWConv1d(LoRAWModule):
@@ -103,6 +106,9 @@ class LoRAWConv1d(LoRAWModule):
             in_dim, self.lora_dim, kernel_size, stride, padding, bias=False
         )
         self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, 1, 1, bias=False)
+
+        torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
+        torch.nn.init.zeros_(self.lora_up.weight)
 
 
 # Original implementation for reference
