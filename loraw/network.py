@@ -25,28 +25,28 @@ class LoRAWNetwork(nn.Module):
         self.lora_dim = lora_dim
         self.alpha = alpha
         self.dropout = dropout
-        self.lora_map = nn.ModuleDict()
-        # Scan model and create loras for respective modules
-        for name, module_dict in target_map.items():
-            module = module_dict["module"]
-            self.lora_map[name] = TargetableModules[module.__class__.__name__].value(name, module)
+        self.loraw_modules = nn.ModuleDict()
+        # Scan model and create loraws for respective modules
+        for name, info in target_map.items():
+            module = info["module"]
+            self.loraw_modules[name] = TargetableModules[module.__class__.__name__].value(name, module)
 
     def activate(self, target_map):
-        for name, lora in self.lora_map.items():
-            lora.inject(target_map[name]["parent"])
+        for name, module in self.loraw_modules.items():
+            module.inject(target_map[name]["parent"])
         self.active = True
-        print(f"Injected {len(self.lora_map)} LoRAW modules into model")
+        print(f"Injected {len(self.loraw_modules)} LoRAW modules into model")
 
     def activate_forward(self):
-        for _, lora in self.lora_map.items():
-            lora.inject_forward()
+        for _, module in self.loraw_modules.items():
+            module.inject_forward()
         self.active = True
-        print(f"Forwarded {len(self.lora_map)} LoRAW modules into model")
+        print(f"Forwarded {len(self.loraw_modules)} LoRAW modules into model")
 
     def set_multiplier(self, multiplier):
         self.multiplier = multiplier
-        for lora in self.unet_loras:
-            lora.multiplier = self.multiplier
+        for _, module in self.loraw_modules.items():
+            module.multiplier = self.multiplier
 
     def is_mergeable(self):
         return True
@@ -83,8 +83,8 @@ class LoRAWWrapper:
         self.target_model = target_model
         self.target_blocks = target_blocks
         self.component_whitelist = component_whitelist
-        self.active = False
-        self.trainable = False
+        self.is_active = False
+        self.is_trainable = False
 
         # Gather candidates for replacement
         self.target_map = scan_model(
@@ -100,33 +100,41 @@ class LoRAWWrapper:
             multiplier=multiplier,
         )
 
+        # Get a list of bottom-level loraw modues, excluding the originals
+        self.residual_modules = nn.ModuleDict()
+        for name, module in self.net.loraw_modules.items():
+            self.residual_modules[f'{name}/lora_up'] = module.lora_up
+            self.residual_modules[f'{name}/lora_down'] = module.lora_down
+
     def activate(self):
-        assert not self.active, "LoRAW is already active"
+        assert not self.is_active, "LoRAW is already active"
         self.net.activate(self.target_map)
-        self.active = True
+        self.is_active = True
 
     def configure_optimizers(self):
-        return optim.Adam([*self.net.parameters()], lr=self.lr)
+        return optim.Adam([*self.residual_modules.parameters()], lr=self.lr)
 
     def prepare_for_training(self, training_wrapper, lr=None):
-        assert self.active, "LoRAW must be activated before training preparation"
+        assert self.is_active, "LoRAW must be activated before training preparation"
 
         # Freeze target model
-        self.target_model.requires_grad_(False)
+        for param in self.target_model.parameters():
+            param.requires_grad = False
 
-        # Unfreeze lora modules
-        self.net.requires_grad_(True)
+        # Unfreeze loraw modules
+        for param in self.residual_modules.parameters():
+            param.requires_grad = True
 
-        # Move lora to training device
+        # Move loraw to training device
         self.net.to(device=training_wrapper.device)
 
-        # Replace optimizer to use lora parameters
+        # Replace optimizer to use loraw parameters
         if lr is None:
             self.lr = training_wrapper.lr
         else:
             self.lr = lr
         training_wrapper.configure_optimizers = self.configure_optimizers
-        self.trainable = True
+        self.is_trainable = True
 
 
 def scan_model(model, target_blocks, whitelist=None, blacklist=None):

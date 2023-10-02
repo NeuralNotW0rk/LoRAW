@@ -20,8 +20,15 @@ class LoRAWController:
         dropout=None,
         multiplier=1.0,
     ) -> LoRAWWrapper:
-
-        loraw = LoRAWWrapper(target_model, target_blocks=target_blocks, )
+        loraw = LoRAWWrapper(
+            target_model,
+            target_blocks=target_blocks,
+            component_whitelist=component_whitelist,
+            lora_dim=lora_dim,
+            alpha=alpha,
+            dropout=dropout,
+            multiplier=multiplier,
+        )
         self.loraws.append(loraw)
         return loraw
 
@@ -38,7 +45,6 @@ class LoRAWController:
         return optims
 
     def prepare_all_for_training(self, training_wrapper, lr=None):
-
         # Freeze target model
         self.target_model.requires_grad_(False)
 
@@ -55,4 +61,4 @@ class LoRAWController:
             self.lr = training_wrapper.lr
         else:
             self.lr = lr
-        training_wrapper.configure_optimizers = self.configure_optimizers()
+        training_wrapper.configure_optimizers = self.configure_optimizers
