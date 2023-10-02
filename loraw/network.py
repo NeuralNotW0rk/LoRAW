@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from typing import List
+from torch import optim
 from enum import Enum
 
 from .module import *
