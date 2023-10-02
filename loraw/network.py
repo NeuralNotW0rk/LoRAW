@@ -3,7 +3,7 @@ from torch import nn
 from torch import optim
 from enum import Enum
 
-from .module import *
+from .module import LoRAWLinear, LoRAWConv1d
 
 class TargetableModules(Enum):
     Linear = LoRAWLinear
@@ -125,31 +125,32 @@ class LoRAWWrapper:
             self.lr = training_wrapper.lr
         else:
             self.lr = lr
-        training_wrapper.configure_optimizers = self.configure_optimizers()
+        training_wrapper.configure_optimizers = self.configure_optimizers
         self.trainable = True
 
 
 def scan_model(model, target_blocks, whitelist=None, blacklist=None):
-    # Find all modules that are in targeted blocks
+    # Find all targetable modules that are in targeted blocks
     # If a whitelist is specified, modules must have at least one whitelisted ancestor
     # If a blacklist is specified, modules must have no blacklisted ancestors
     target_blocks = set(target_blocks)
     whitelist = set(whitelist) if whitelist is not None else None
     blacklist = set(blacklist) if blacklist is not None else None
     module_map = {}
-    for parent_name, parent_module in model.named_modules():
-        parent_name_split = set(parent_name.split("."))
+    for ancestor_name, ancestor_module in model.named_modules():
+        ancestor_set = set(ancestor_name.split("."))
         if (
-            parent_module.__class__.__name__ in target_blocks
-            and (whitelist is None or not parent_name_split.isdisjoint(whitelist))
-            and (blacklist is None or parent_name_split.isdisjoint(blacklist))
+            ancestor_module.__class__.__name__ in target_blocks
+            and (whitelist is None or not ancestor_set.isdisjoint(whitelist))
+            and (blacklist is None or ancestor_set.isdisjoint(blacklist))
         ):
-            for child_name, child_module in parent_module.named_modules():
-                if child_module.__class__.__name__ in TargetableModules.__members__:
-                    for name in child_name.split(".")[:-1]:
-                        parent_module = parent_module._modules[name]
+            for decendant_name, decendant_module in ancestor_module.named_modules():
+                if decendant_module.__class__.__name__ in TargetableModules.__members__:
+                    # Get parent if child is not a direct decendant
+                    for name in decendant_name.split(".")[:-1]:
+                        ancestor_module = ancestor_module._modules[name]
                     # Since '.' is not allowed, replace with '/' (makes it look like a path)
-                    id = f"{parent_name}.{child_name}".replace(".", "/")
-                    module_map[id] = {"module": child_module, "parent": parent_module}
+                    id = f"{ancestor_name}.{decendant_name}".replace(".", "/")
+                    module_map[id] = {"module": decendant_module, "parent": ancestor_module}
     print(f"Found {len(module_map)} candidates for LoRAW replacement")
     return module_map
