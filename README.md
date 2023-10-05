@@ -10,6 +10,8 @@ Highly experimental still
 ## Construction
 Create a loraw using the LoRAWWrapper class. For example using a conditional diffusion model for which we only want to target the down and up unet components:
 ```Python
+from LoRAW.network import LoRAWWrapper
+
 loraw = LoRAWWrapper(
     target_model,
     target_blocks=["Attention"],
@@ -38,5 +40,5 @@ loraw.prepare_for_training(training_wrapper)
 
 For training to work manually, you need to:
 - Set all original weights to `requires_grad = False`
-- Set loraw weights set to `requires_grad = True` (easily accessed with `loraw.residule_modules.parameters()`)
+- Set loraw weights set to `requires_grad = True` (easily accessed with `loraw.residual_modules.parameters()`)
 - Update the optimizer to use the loraw parameters (the same parameters as the previous step)
