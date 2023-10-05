@@ -89,7 +89,6 @@ class LoRAWConv1d(LoRAWModule):
         super().__init__(
             lora_name,
             original_module,
-            parent_module,
             multiplier,
             lora_dim,
             alpha,

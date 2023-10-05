@@ -5,6 +5,7 @@ from enum import Enum
 
 from .module import LoRAWLinear, LoRAWConv1d
 
+
 class TargetableModules(Enum):
     Linear = LoRAWLinear
     Conv1d = LoRAWConv1d
@@ -29,7 +30,9 @@ class LoRAWNetwork(nn.Module):
         # Scan model and create loraws for respective modules
         for name, info in target_map.items():
             module = info["module"]
-            self.loraw_modules[name] = TargetableModules[module.__class__.__name__].value(name, module)
+            self.loraw_modules[name] = TargetableModules[
+                module.__class__.__name__
+            ].value(name, module)
 
     def activate(self, target_map):
         for name, module in self.loraw_modules.items():
@@ -47,26 +50,6 @@ class LoRAWNetwork(nn.Module):
         self.multiplier = multiplier
         for _, module in self.loraw_modules.items():
             module.multiplier = self.multiplier
-
-    def is_mergeable(self):
-        return True
-
-    def save_weights(self, file, dtype=torch.float16):
-        state_dict = self.state_dict()
-
-        if dtype is not None:
-            for key in list(state_dict.keys()):
-                v = state_dict[key]
-                v = v.detach().clone().to("cpu").to(dtype)
-                state_dict[key] = v
-
-        torch.save(state_dict, file)
-
-    def load_weights(self, file):
-        weights_sd = torch.load(file, map_location="cpu")
-
-        info = self.load_state_dict(weights_sd, False)
-        return info
 
 
 class LoRAWWrapper:
@@ -103,8 +86,8 @@ class LoRAWWrapper:
         # Get a list of bottom-level loraw modues, excluding the originals
         self.residual_modules = nn.ModuleDict()
         for name, module in self.net.loraw_modules.items():
-            self.residual_modules[f'{name}/lora_up'] = module.lora_up
-            self.residual_modules[f'{name}/lora_down'] = module.lora_down
+            self.residual_modules[f"{name}/lora_up"] = module.lora_up
+            self.residual_modules[f"{name}/lora_down"] = module.lora_down
 
     def activate(self):
         assert not self.is_active, "LoRAW is already active"
@@ -136,6 +119,19 @@ class LoRAWWrapper:
         training_wrapper.configure_optimizers = self.configure_optimizers
         self.is_trainable = True
 
+    def save_weights(self, path, dtype=torch.float16):
+        torch.save(self.residual_modules.state_dict(), path)
+
+    def load_weights(self, path):
+        weights = torch.load(path, map_location="cpu")
+        info = self.residual_modules.load_state_dict(weights, False)
+        return info
+
+    def merge_weights(self, path, multiplier=1.0):
+        weights = torch.load(path, map_location="cpu")
+        for name, weight in weights.items():
+            self.residual_modules.state_dict()[name] += weight * multiplier
+
 
 def scan_model(model, target_blocks, whitelist=None, blacklist=None):
     # Find all targetable modules that are in targeted blocks
@@ -159,6 +155,9 @@ def scan_model(model, target_blocks, whitelist=None, blacklist=None):
                         ancestor_module = ancestor_module._modules[name]
                     # Since '.' is not allowed, replace with '/' (makes it look like a path)
                     id = f"{ancestor_name}.{decendant_name}".replace(".", "/")
-                    module_map[id] = {"module": decendant_module, "parent": ancestor_module}
+                    module_map[id] = {
+                        "module": decendant_module,
+                        "parent": ancestor_module,
+                    }
     print(f"Found {len(module_map)} candidates for LoRAW replacement")
     return module_map
