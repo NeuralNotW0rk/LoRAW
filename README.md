@@ -10,7 +10,7 @@ Highly experimental still
 ## Construction
 Create a loraw using the LoRAWWrapper class. For example using a conditional diffusion model for which we only want to target the down and up unet components:
 ```Python
-from LoRAW.network import LoRAWWrapper
+from loraw.network import LoRAWWrapper
 
 loraw = LoRAWWrapper(
     target_model,
