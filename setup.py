@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='loraw',
-    version='1.0.0',
+    version='1.2.0',
     url='',
     author='Griffin Page',
     packages=find_packages(),    

@@ -26,29 +26,29 @@ class LoRAWNetwork(nn.Module):
         self.lora_dim = lora_dim
         self.alpha = alpha
         self.dropout = dropout
-        self.loraw_modules = nn.ModuleDict()
-        # Scan model and create loraws for respective modules
+        self.lora_modules = nn.ModuleDict()
+        # Scan model and create loras for respective modules
         for name, info in target_map.items():
             module = info["module"]
-            self.loraw_modules[name] = TargetableModules[
+            self.lora_modules[name] = TargetableModules[
                 module.__class__.__name__
             ].value(name, module)
 
     def activate(self, target_map):
-        for name, module in self.loraw_modules.items():
+        for name, module in self.lora_modules.items():
             module.inject(target_map[name]["parent"])
         self.active = True
-        print(f"Injected {len(self.loraw_modules)} LoRAW modules into model")
+        print(f"Injected {len(self.lora_modules)} LoRAW modules into model")
 
     def activate_forward(self):
-        for _, module in self.loraw_modules.items():
+        for _, module in self.lora_modules.items():
             module.inject_forward()
         self.active = True
-        print(f"Forwarded {len(self.loraw_modules)} LoRAW modules into model")
+        print(f"Forwarded {len(self.lora_modules)} LoRAW modules into model")
 
     def set_multiplier(self, multiplier):
         self.multiplier = multiplier
-        for _, module in self.loraw_modules.items():
+        for _, module in self.lora_modules.items():
             module.multiplier = self.multiplier
 
 
@@ -83,9 +83,9 @@ class LoRAWWrapper:
             multiplier=multiplier,
         )
 
-        # Get a list of bottom-level loraw modues, excluding the originals
+        # Get a list of bottom-level lora modues, excluding the originals
         self.residual_modules = nn.ModuleDict()
-        for name, module in self.net.loraw_modules.items():
+        for name, module in self.net.lora_modules.items():
             self.residual_modules[f"{name}/lora_up"] = module.lora_up
             self.residual_modules[f"{name}/lora_down"] = module.lora_down
 
@@ -104,14 +104,14 @@ class LoRAWWrapper:
         for param in self.target_model.parameters():
             param.requires_grad = False
 
-        # Unfreeze loraw modules
+        # Unfreeze lora modules
         for param in self.residual_modules.parameters():
             param.requires_grad = True
 
-        # Move loraw to training device
+        # Move lora to training device
         self.net.to(device=training_wrapper.device)
 
-        # Replace optimizer to use loraw parameters
+        # Replace optimizer to use lora parameters
         if lr is None:
             self.lr = training_wrapper.lr
         else:
@@ -130,7 +130,14 @@ class LoRAWWrapper:
     def merge_weights(self, path, multiplier=1.0):
         weights = torch.load(path, map_location="cpu")
         for name, weight in weights.items():
-            self.residual_modules.state_dict()[name] += weight * multiplier
+            param = self.residual_modules.state_dict()[name]
+            param.copy_(param + weight * multiplier) 
+
+    def extract_diff(self, tuned_model):
+        lora_weights = calculate_svds(self.net.lora_modules, tuned_model, self.net.lora_modules.keys(), rank=self.net.lora_dim)
+        for name, (up_weight, down_weight) in lora_weights.items():
+            self.residual_modules[f"{name}/lora_up"].weight.copy_(up_weight)
+            self.residual_modules[f"{name}/lora_down"].weight.copy_(down_weight)
 
 
 def scan_model(model, target_blocks, whitelist=None, blacklist=None):
@@ -161,3 +168,62 @@ def scan_model(model, target_blocks, whitelist=None, blacklist=None):
                     }
     print(f"Found {len(module_map)} candidates for LoRAW replacement")
     return module_map
+
+CLAMP_QUANTILE = 0.99
+MIN_DIFF = 1e-6
+
+def calculate_svds(model_original, model_tuned, lora_names, rank):
+    map_o = {name.replace('.', '/'): module for name, module in model_original.named_modules()}
+    map_t = {name.replace('.', '/'): module for name, module in model_tuned.named_modules()}
+
+    # Get diffs
+    diffs = {}
+    for name in lora_names:
+        diff = map_t[name].weight - map_o[name].weight
+        diff = diff.float()
+        diffs[name] = diff
+
+    # Calculate SVD
+    lora_weights = {}
+    with torch.no_grad():
+        for lora_name, mat in list(diffs.items()):
+            conv1d = len(mat.size()) == 3
+            kernel_size = None if not conv1d else mat.size()[2]
+            out_dim, in_dim = mat.size()[0:2]
+
+            mat_padded = torch.zeros(max(out_dim, rank), max(in_dim, rank), kernel_size)
+            mat_padded[:out_dim, :in_dim] = mat
+
+            if conv1d:
+                if kernel_size != 1:
+                    mat_padded = mat_padded.flatten(start_dim=1)
+                else:
+                    mat_padded = mat_padded.squeeze()
+
+            U, S, Vh = torch.linalg.svd(mat_padded)
+
+            U = U[:, :rank]
+            S = S[:rank]
+            U = U @ torch.diag_embed(S)
+
+            Vh = Vh[:rank, :]
+
+            dist = torch.cat([U.flatten(), Vh.flatten()])
+            hi_val = torch.quantile(dist, CLAMP_QUANTILE)
+            low_val = -hi_val
+
+            U = U.clamp(low_val, hi_val)
+            Vh = Vh.clamp(low_val, hi_val)
+
+            if conv1d:
+                U = U.reshape(max(out_dim, rank), rank, 1)
+                Vh = Vh.reshape(rank, max(in_dim, rank), kernel_size)
+
+            U = U.to("cpu").contiguous()
+            Vh = Vh.to("cpu").contiguous()
+
+            # Record lora_up and lora_down weights
+            lora_weights[lora_name] = (U[:out_dim], Vh[:, :in_dim])
+
+    return lora_weights
+    

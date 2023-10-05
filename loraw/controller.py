@@ -2,7 +2,7 @@ from torch import nn
 from torch import optim
 from ema_pytorch import EMA
 
-from .network import LoRAWNetwork
+from .network import LoRAWWrapper
 
 
 class LoRAWController:
