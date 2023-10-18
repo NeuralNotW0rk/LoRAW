@@ -16,9 +16,10 @@ class LoRAWNetwork(nn.Module):
         self,
         target_map,
         multiplier=1.0,
-        lora_dim=4,
-        alpha=1,
+        lora_dim=16,
+        alpha=1.0,
         dropout=None,
+        module_dropout=None,
     ):
         super().__init__()
         self.active = False
@@ -26,13 +27,22 @@ class LoRAWNetwork(nn.Module):
         self.lora_dim = lora_dim
         self.alpha = alpha
         self.dropout = dropout
+        self.module_dropout = module_dropout
         self.lora_modules = nn.ModuleDict()
         # Scan model and create loras for respective modules
         for name, info in target_map.items():
             module = info["module"]
             self.lora_modules[name] = TargetableModules[
                 module.__class__.__name__
-            ].value(name, module)
+            ].value(
+                name,
+                module,
+                multiplier=multiplier,
+                lora_dim=lora_dim,
+                alpha=alpha,
+                dropout=dropout,
+                module_dropout=module_dropout,
+            )
 
     def activate(self, target_map):
         for name, module in self.lora_modules.items():
@@ -58,10 +68,11 @@ class LoRAWWrapper:
         target_model,
         target_blocks=["Attention"],
         component_whitelist=None,
+        multiplier=1.0,
         lora_dim=16,
         alpha=1.0,
         dropout=None,
-        multiplier=1.0,
+        module_dropout=None,
     ):
         self.target_model = target_model
         self.target_blocks = target_blocks
@@ -77,10 +88,11 @@ class LoRAWWrapper:
         # Construct LoRAW network
         self.net = LoRAWNetwork(
             self.target_map,
+            multiplier=multiplier,
             lora_dim=lora_dim,
             alpha=alpha,
             dropout=dropout,
-            multiplier=multiplier,
+            module_dropout=module_dropout,
         )
 
         # Get a list of bottom-level lora modues, excluding the originals
@@ -131,10 +143,15 @@ class LoRAWWrapper:
         weights = torch.load(path, map_location="cpu")
         for name, weight in weights.items():
             param = self.residual_modules.state_dict()[name]
-            param.copy_(param + weight * multiplier) 
+            param.copy_(param + weight * multiplier)
 
     def extract_diff(self, tuned_model):
-        lora_weights = calculate_svds(self.net.lora_modules, tuned_model, self.net.lora_modules.keys(), rank=self.net.lora_dim)
+        lora_weights = calculate_svds(
+            self.net.lora_modules,
+            tuned_model,
+            self.net.lora_modules.keys(),
+            rank=self.net.lora_dim,
+        )
         for name, (up_weight, down_weight) in lora_weights.items():
             self.residual_modules[f"{name}/lora_up"].weight.copy_(up_weight)
             self.residual_modules[f"{name}/lora_down"].weight.copy_(down_weight)
@@ -169,12 +186,19 @@ def scan_model(model, target_blocks, whitelist=None, blacklist=None):
     print(f"Found {len(module_map)} candidates for LoRAW replacement")
     return module_map
 
+
 CLAMP_QUANTILE = 0.99
 MIN_DIFF = 1e-6
 
+
 def calculate_svds(model_original, model_tuned, lora_names, rank):
-    map_o = {name.replace('.', '/'): module for name, module in model_original.named_modules()}
-    map_t = {name.replace('.', '/'): module for name, module in model_tuned.named_modules()}
+    map_o = {
+        name.replace(".", "/"): module
+        for name, module in model_original.named_modules()
+    }
+    map_t = {
+        name.replace(".", "/"): module for name, module in model_tuned.named_modules()
+    }
 
     # Get diffs
     diffs = {}
@@ -226,4 +250,39 @@ def calculate_svds(model_original, model_tuned, lora_names, rank):
             lora_weights[lora_name] = (U[:out_dim], Vh[:, :in_dim])
 
     return lora_weights
-    
+
+
+def create_loraw_from_config(config, model):
+    loraw_config = config["loraw"]
+
+    target_blocks = loraw_config.get("target_blocks", None)
+    assert target_blocks is not None, "Must specify target blocks in config"
+
+    component_whitelist = loraw_config.get("component_whitelist", None)
+    assert component_whitelist is not None, "Must specify component whitelist in config"
+
+    multiplier = loraw_config.get("multiplier", None)
+    assert multiplier is not None, "Must specify multiplier in config"
+
+    rank = loraw_config.get("rank", None)
+    assert rank is not None, "Must specify rank in config"
+
+    alpha = loraw_config.get("alpha", None)
+    assert alpha is not None, "Must specify alpha in config"
+
+    dropout = loraw_config.get("dropout", None)
+    assert dropout is not None, "Must specify dropout in config"
+
+    module_dropout = loraw_config.get("module_dropout", None)
+    assert module_dropout is not None, "Must specify module dropout in config"
+
+    return LoRAWWrapper(
+        model,
+        target_blocks=target_blocks,
+        component_whitelist=component_whitelist,
+        multiplier=multiplier,
+        lora_dim=rank,
+        alpha=alpha,
+        dropout=dropout,
+        module_dropout=module_dropout,
+    )
