@@ -3,7 +3,7 @@ from torch import nn
 from torch import optim
 from enum import Enum
 
-from .module import LoRAWLinear, LoRAWConv1d
+from .modules import LoRAWLinear, LoRAWConv1d
 
 
 class TargetableModules(Enum):
