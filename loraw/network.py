@@ -4,11 +4,43 @@ from torch import optim
 from enum import Enum
 
 from .modules import LoRAWLinear, LoRAWConv1d
+from .util import *
+from .attributes import *
 
 
 class TargetableModules(Enum):
     Linear = LoRAWLinear
     Conv1d = LoRAWConv1d
+
+
+def scan_model(model, target_blocks, whitelist=None, blacklist=None):
+    # Find all targetable modules that are in targeted blocks
+    target_blocks = set(target_blocks)
+    # If a whitelist is specified, modules must have at least one whitelisted ancestor
+    whitelist = set(whitelist) if whitelist is not None else None
+    # If a blacklist is specified, modules must have no blacklisted ancestors
+    blacklist = set(blacklist) if blacklist is not None else None
+    module_map = {}
+    for ancestor_name, ancestor_module in model.named_modules():
+        ancestor_set = set(ancestor_name.split("."))
+        if (
+            ancestor_module.__class__.__name__ in target_blocks
+            and (whitelist is None or not ancestor_set.isdisjoint(whitelist))
+            and (blacklist is None or ancestor_set.isdisjoint(blacklist))
+        ):
+            for decendant_name, decendant_module in ancestor_module.named_modules():
+                if decendant_module.__class__.__name__ in TargetableModules.__members__:
+                    # Get parent if child is not a direct decendant
+                    for name in decendant_name.split(".")[:-1]:
+                        ancestor_module = ancestor_module._modules[name]
+                    # Since '.' is not allowed, replace with '/' (makes it look like a path)
+                    id = f"{ancestor_name}.{decendant_name}".replace(".", "/")
+                    module_map[id] = {
+                        "module": decendant_module,
+                        "parent": ancestor_module,
+                    }
+    print(f"Found {len(module_map)} candidates for LoRAW replacement")
+    return module_map
 
 
 class LoRAWNetwork(nn.Module):
@@ -66,6 +98,7 @@ class LoRAWWrapper:
     def __init__(
         self,
         target_model,
+        model_type=None,
         target_blocks=["Attention"],
         component_whitelist=None,
         multiplier=1.0,
@@ -75,8 +108,10 @@ class LoRAWWrapper:
         module_dropout=None,
     ):
         self.target_model = target_model
+        self.model_type = model_type
         self.target_blocks = target_blocks
         self.component_whitelist = component_whitelist
+
         self.is_active = False
         self.is_trainable = False
 
@@ -95,11 +130,11 @@ class LoRAWWrapper:
             module_dropout=module_dropout,
         )
 
-        # Get a list of bottom-level lora modues, excluding the originals
+        # Get a list of bottom-level lora modules, excluding the originals
         self.residual_modules = nn.ModuleDict()
         for name, module in self.net.lora_modules.items():
-            self.residual_modules[f"{name}/lora_up"] = module.lora_up
             self.residual_modules[f"{name}/lora_down"] = module.lora_down
+            self.residual_modules[f"{name}/lora_up"] = module.lora_up
 
     def activate(self):
         assert not self.is_active, "LoRAW is already active"
@@ -129,6 +164,11 @@ class LoRAWWrapper:
         else:
             self.lr = lr
         training_wrapper.configure_optimizers = self.configure_optimizers
+
+        # Trim ema model if present
+        if self.model_type is not None and self.model_type in EMA_MODEL:
+            trim_ema(getattr(training_wrapper, EMA_MODEL[self.model_type]))
+
         self.is_trainable = True
 
     def save_weights(self, path, dtype=torch.float16):
@@ -152,108 +192,15 @@ class LoRAWWrapper:
             self.net.lora_modules.keys(),
             rank=self.net.lora_dim,
         )
-        for name, (up_weight, down_weight) in lora_weights.items():
-            self.residual_modules[f"{name}/lora_up"].weight.copy_(up_weight)
+        for name, (down_weight, up_weight) in lora_weights.items():
             self.residual_modules[f"{name}/lora_down"].weight.copy_(down_weight)
-
-
-def scan_model(model, target_blocks, whitelist=None, blacklist=None):
-    # Find all targetable modules that are in targeted blocks
-    # If a whitelist is specified, modules must have at least one whitelisted ancestor
-    # If a blacklist is specified, modules must have no blacklisted ancestors
-    target_blocks = set(target_blocks)
-    whitelist = set(whitelist) if whitelist is not None else None
-    blacklist = set(blacklist) if blacklist is not None else None
-    module_map = {}
-    for ancestor_name, ancestor_module in model.named_modules():
-        ancestor_set = set(ancestor_name.split("."))
-        if (
-            ancestor_module.__class__.__name__ in target_blocks
-            and (whitelist is None or not ancestor_set.isdisjoint(whitelist))
-            and (blacklist is None or ancestor_set.isdisjoint(blacklist))
-        ):
-            for decendant_name, decendant_module in ancestor_module.named_modules():
-                if decendant_module.__class__.__name__ in TargetableModules.__members__:
-                    # Get parent if child is not a direct decendant
-                    for name in decendant_name.split(".")[:-1]:
-                        ancestor_module = ancestor_module._modules[name]
-                    # Since '.' is not allowed, replace with '/' (makes it look like a path)
-                    id = f"{ancestor_name}.{decendant_name}".replace(".", "/")
-                    module_map[id] = {
-                        "module": decendant_module,
-                        "parent": ancestor_module,
-                    }
-    print(f"Found {len(module_map)} candidates for LoRAW replacement")
-    return module_map
-
-
-CLAMP_QUANTILE = 0.99
-MIN_DIFF = 1e-6
-
-
-def calculate_svds(model_original, model_tuned, lora_names, rank):
-    map_o = {
-        name.replace(".", "/"): module
-        for name, module in model_original.named_modules()
-    }
-    map_t = {
-        name.replace(".", "/"): module for name, module in model_tuned.named_modules()
-    }
-
-    # Get diffs
-    diffs = {}
-    for name in lora_names:
-        diff = map_t[name].weight - map_o[name].weight
-        diff = diff.float()
-        diffs[name] = diff
-
-    # Calculate SVD
-    lora_weights = {}
-    with torch.no_grad():
-        for lora_name, mat in list(diffs.items()):
-            conv1d = len(mat.size()) == 3
-            kernel_size = None if not conv1d else mat.size()[2]
-            out_dim, in_dim = mat.size()[0:2]
-
-            mat_padded = torch.zeros(max(out_dim, rank), max(in_dim, rank), kernel_size)
-            mat_padded[:out_dim, :in_dim] = mat
-
-            if conv1d:
-                if kernel_size != 1:
-                    mat_padded = mat_padded.flatten(start_dim=1)
-                else:
-                    mat_padded = mat_padded.squeeze()
-
-            U, S, Vh = torch.linalg.svd(mat_padded)
-
-            U = U[:, :rank]
-            S = S[:rank]
-            U = U @ torch.diag_embed(S)
-
-            Vh = Vh[:rank, :]
-
-            dist = torch.cat([U.flatten(), Vh.flatten()])
-            hi_val = torch.quantile(dist, CLAMP_QUANTILE)
-            low_val = -hi_val
-
-            U = U.clamp(low_val, hi_val)
-            Vh = Vh.clamp(low_val, hi_val)
-
-            if conv1d:
-                U = U.reshape(max(out_dim, rank), rank, 1)
-                Vh = Vh.reshape(rank, max(in_dim, rank), kernel_size)
-
-            U = U.to("cpu").contiguous()
-            Vh = Vh.to("cpu").contiguous()
-
-            # Record lora_up and lora_down weights
-            lora_weights[lora_name] = (U[:out_dim], Vh[:, :in_dim])
-
-    return lora_weights
+            self.residual_modules[f"{name}/lora_up"].weight.copy_(up_weight)
 
 
 def create_loraw_from_config(config, model):
     loraw_config = config["loraw"]
+
+    model_type = config["model_type"]
 
     target_blocks = loraw_config.get("target_blocks", None)
     assert target_blocks is not None, "Must specify target blocks in config"
@@ -276,8 +223,9 @@ def create_loraw_from_config(config, model):
     module_dropout = loraw_config.get("module_dropout", None)
     assert module_dropout is not None, "Must specify module dropout in config"
 
-    return LoRAWWrapper(
+    loraw = LoRAWWrapper(
         model,
+        model_type=model_type,
         target_blocks=target_blocks,
         component_whitelist=component_whitelist,
         multiplier=multiplier,
