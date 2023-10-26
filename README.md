@@ -22,6 +22,28 @@ loraw = LoRAWWrapper(
     multiplier=1.0
 )
 ```
+If using stable-audio-tools, you can create a LoRAW based on your model config:
+```Python
+from loraw.network import create_loraw_from_config
+
+loraw = create_loraw_from_config(model_config, target_model)
+```
+For this to work, you need to add a loraw section to the model config. For example:
+```JSON
+{
+    "model_type": "diffusion_cond"
+    // ... args, model, training, etc. ...
+    "loraw": {
+        "target_blocks": ["Attention"],
+        "component_whitelist": ["downsamples", "upsamples"],
+        "multiplier": 1.0,
+        "rank": 16,
+        "alpha": 1.0,
+        "dropout": 0,
+        "module_dropout": 0
+    }
+}
+```
 
 ## Activation
 If you want to load weights into the target model, be sure to do so first as activation will alter the structure and confuse state_dict copying
@@ -42,3 +64,8 @@ For training to work manually, you need to:
 - Set all original weights to `requires_grad = False`
 - Set loraw weights set to `requires_grad = True` (easily accessed with `loraw.residual_modules.parameters()`)
 - Update the optimizer to use the loraw parameters (the same parameters as the previous step)
+
+# Example
+See `scripts/train.py` for a modified version of stable audio tool's trainig script.
+
+Modify your model config as shown above, and use `--use-loraw` when running in CLI to enable
