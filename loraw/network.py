@@ -234,3 +234,5 @@ def create_loraw_from_config(config, model):
         dropout=dropout,
         module_dropout=module_dropout,
     )
+
+    return loraw
