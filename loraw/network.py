@@ -219,11 +219,9 @@ def create_loraw_from_config(config, model):
 
     dropout = loraw_config.get("dropout", None)
     if dropout == 0: dropout = None
-    assert dropout is not None, "Must specify dropout in config"
 
     module_dropout = loraw_config.get("module_dropout", None)
     if module_dropout == 0: module_dropout = None
-    assert module_dropout is not None, "Must specify module dropout in config"
 
     loraw = LoRAWWrapper(
         model,
