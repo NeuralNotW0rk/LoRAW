@@ -1,4 +1,5 @@
 import pytorch_lightning as pl
+import os
 from weakref import proxy
 
 from .network import LoRAWWrapper
@@ -10,6 +11,7 @@ class LoRAWModelCheckpoint(pl.callbacks.ModelCheckpoint):
         self.loraw = loraw
 
     def _save_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
         self.loraw.save_weights(filepath)
 
         self._last_global_step_saved = trainer.global_step
