@@ -33,8 +33,8 @@ For this to work, you need to add a loraw section to the model config. For examp
 {
     "model_type": "diffusion_cond"
     // ... args, model, training, etc. ...
-    "loraw": {
-        "target_blocks": ["Attention"],
+	"loraw": {
+        "target_blocks": ["Attention", "ConvBlock1d"],
         "component_whitelist": ["downsamples", "upsamples"],
         "multiplier": 1.0,
         "rank": 16,
@@ -55,7 +55,7 @@ loraw.activate()
 `loraw.load_weights(path)` and `loraw.save_weights(path)` are for simple file IO. `loraw.merge_weights(path)` can be used to add more checkpoints without overwriting the current state.
 
 ## Training
-With harmonai-tools, after activation, you can simply call
+With stable-audio-tools, after activation, you can simply call
 ```Python
 loraw.prepare_for_training(training_wrapper)
 ```
@@ -66,6 +66,6 @@ For training to work manually, you need to:
 - Update the optimizer to use the loraw parameters (the same parameters as the previous step)
 
 # Example
-See `scripts/train.py` for a modified version of stable audio tool's trainig script.
+See `scripts/train.py` for a modified version of stable audio tool's training script.
 
-Modify your model config as shown above, and use `--use-loraw` when running in CLI to enable
+Modify your model config as shown above, and use `--use-loraw true` when running in CLI to enable
