@@ -67,7 +67,7 @@ def calculate_svds(model_original, model_tuned, lora_names, rank):
     return lora_weights
 
 
-# Remove redundancy by sharing weights between online and ema models which will not be updated during loraw training
+# Remove redundancy by sharing weights between online and ema models which will not be updated during lora training
 def trim_ema(ema: ema_pytorch.EMA):
     for (name, module_online), module_ema in zip(
         ema.online_model.named_modules(), ema.ema_model.modules()

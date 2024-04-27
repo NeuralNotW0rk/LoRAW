@@ -3,14 +3,14 @@ from torch import nn
 from torch import optim
 from enum import Enum
 
-from .modules import LoRAWLinear, LoRAWConv1d
+from .modules import LoRALinear, LoRAConv1d
 from .util import *
 from .attributes import *
 
 
 class TargetableModules(Enum):
-    Linear = LoRAWLinear
-    Conv1d = LoRAWConv1d
+    Linear = LoRALinear
+    Conv1d = LoRAConv1d
 
 
 def scan_model(model, target_blocks, whitelist=None, blacklist=None):
@@ -39,11 +39,11 @@ def scan_model(model, target_blocks, whitelist=None, blacklist=None):
                         "module": decendant_module,
                         "parent": ancestor_module,
                     }
-    print(f"Found {len(module_map)} candidates for LoRAW replacement")
+    print(f"Found {len(module_map)} candidates for LoRA replacement")
     return module_map
 
 
-class LoRAWNetwork(nn.Module):
+class LoRANetwork(nn.Module):
     def __init__(
         self,
         target_map,
@@ -80,13 +80,13 @@ class LoRAWNetwork(nn.Module):
         for name, module in self.lora_modules.items():
             module.inject(target_map[name]["parent"])
         self.active = True
-        print(f"Injected {len(self.lora_modules)} LoRAW modules into model")
+        print(f"Injected {len(self.lora_modules)} LoRA modules into model")
 
     def activate_forward(self):
         for _, module in self.lora_modules.items():
             module.inject_forward()
         self.active = True
-        print(f"Forwarded {len(self.lora_modules)} LoRAW modules into model")
+        print(f"Forwarded {len(self.lora_modules)} LoRA modules into model")
 
     def set_multiplier(self, multiplier):
         self.multiplier = multiplier
@@ -94,7 +94,7 @@ class LoRAWNetwork(nn.Module):
             module.multiplier = self.multiplier
 
 
-class LoRAWWrapper:
+class LoRAWrapper:
     def __init__(
         self,
         target_model,
@@ -120,8 +120,8 @@ class LoRAWWrapper:
             target_model, target_blocks, whitelist=component_whitelist
         )
 
-        # Construct LoRAW network
-        self.net = LoRAWNetwork(
+        # Construct LoRA network
+        self.net = LoRANetwork(
             self.target_map,
             multiplier=multiplier,
             lora_dim=lora_dim,
@@ -137,7 +137,7 @@ class LoRAWWrapper:
             self.residual_modules[f"{name}/lora_up"] = module.lora_up
 
     def activate(self):
-        assert not self.is_active, "LoRAW is already active"
+        assert not self.is_active, "LoRA is already active"
         self.net.activate(self.target_map)
         self.is_active = True
 
@@ -145,7 +145,7 @@ class LoRAWWrapper:
         return optim.Adam([*self.residual_modules.parameters()], lr=self.lr)
 
     def prepare_for_training(self, training_wrapper, lr=None):
-        assert self.is_active, "LoRAW must be activated before training preparation"
+        assert self.is_active, "LoRA must be activated before training preparation"
 
         # Freeze target model
         for param in self.target_model.parameters():
@@ -160,7 +160,8 @@ class LoRAWWrapper:
 
         # Replace optimizer to use lora parameters
         if lr is None:
-            self.lr = training_wrapper.lr
+            # TODO: implement config-based optimizer patching
+            assert False "config-based optimizers not implemented"
         else:
             self.lr = lr
         training_wrapper.configure_optimizers = self.configure_optimizers
@@ -197,33 +198,33 @@ class LoRAWWrapper:
             self.residual_modules[f"{name}/lora_up"].weight.copy_(up_weight)
 
 
-def create_loraw_from_config(config, model):
-    loraw_config = config["loraw"]
+def create_lora_from_config(config, model):
+    lora_config = config["lora"]
 
     model_type = config["model_type"]
 
-    target_blocks = loraw_config.get("target_blocks", None)
+    target_blocks = lora_config.get("target_blocks", None)
     assert target_blocks is not None, "Must specify target blocks in config"
 
-    component_whitelist = loraw_config.get("component_whitelist", None)
+    component_whitelist = lora_config.get("component_whitelist", None)
     assert component_whitelist is not None, "Must specify component whitelist in config"
 
-    multiplier = loraw_config.get("multiplier", None)
+    multiplier = lora_config.get("multiplier", None)
     assert multiplier is not None, "Must specify multiplier in config"
 
-    rank = loraw_config.get("rank", None)
+    rank = lora_config.get("rank", None)
     assert rank is not None, "Must specify rank in config"
 
-    alpha = loraw_config.get("alpha", None)
+    alpha = lora_config.get("alpha", None)
     assert alpha is not None, "Must specify alpha in config"
 
-    dropout = loraw_config.get("dropout", None)
+    dropout = lora_config.get("dropout", None)
     if dropout == 0: dropout = None
 
-    module_dropout = loraw_config.get("module_dropout", None)
+    module_dropout = lora_config.get("module_dropout", None)
     if module_dropout == 0: module_dropout = None
 
-    loraw = LoRAWWrapper(
+    lora = LoRAWrapper(
         model,
         model_type=model_type,
         target_blocks=target_blocks,
@@ -233,6 +234,7 @@ def create_loraw_from_config(config, model):
         alpha=alpha,
         dropout=dropout,
         module_dropout=module_dropout,
+        lr=lr
     )
 
-    return loraw
+    return lora

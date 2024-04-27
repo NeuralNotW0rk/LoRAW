@@ -3,7 +3,7 @@ import torch
 from torch import nn
 
 
-class LoRAWModule(nn.Module):
+class LoRAModule(nn.Module):
     def __init__(
         self,
         lora_name,
@@ -29,7 +29,7 @@ class LoRAWModule(nn.Module):
         self.scale = alpha / self.lora_dim
 
     def forward(self, x):
-        # module dropout (skip loraw module)
+        # module dropout (skip lora module)
         if self.module_dropout is not None and self.training:
             if torch.rand(1) < self.module_dropout:
                 return self.original_forward(x)
@@ -55,7 +55,7 @@ class LoRAWModule(nn.Module):
         del self.original_module
 
 
-class LoRAWLinear(LoRAWModule):
+class LoRALinear(LoRAModule):
     def __init__(
         self,
         lora_name,
@@ -84,7 +84,7 @@ class LoRAWLinear(LoRAWModule):
         torch.nn.init.zeros_(self.lora_up.weight)
 
 
-class LoRAWConv1d(LoRAWModule):
+class LoRAConv1d(LoRAModule):
     def __init__(
         self,
         lora_name,
