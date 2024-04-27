@@ -233,8 +233,7 @@ def create_lora_from_config(config, model):
         lora_dim=rank,
         alpha=alpha,
         dropout=dropout,
-        module_dropout=module_dropout,
-        lr=lr
+        module_dropout=module_dropout
     )
 
     return lora
