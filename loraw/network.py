@@ -161,7 +161,7 @@ class LoRAWrapper:
         # Replace optimizer to use lora parameters
         if lr is None:
             # TODO: implement config-based optimizer patching
-            assert False "config-based optimizers not implemented"
+            assert False, "config-based optimizers not implemented"
         else:
             self.lr = lr
         training_wrapper.configure_optimizers = self.configure_optimizers
