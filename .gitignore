@@ -1,6 +1,7 @@
 wandb/
 artifacts/
 debug/
+checkpoints/
 __pycache__/
 *.wav
 *.ckpt
