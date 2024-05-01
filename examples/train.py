@@ -84,7 +84,7 @@ def main():
 
     # LORA: Prepare training
     if args.use_lora == 'true':
-        lora.prepare_for_training(training_wrapper, lr=5e-5)
+        lora.prepare_for_training(training_wrapper)
 
     wandb_logger = pl.loggers.WandbLogger(project=args.name)
     wandb_logger.watch(training_wrapper)

@@ -129,6 +129,7 @@
         "rank": 16,
         "alpha": 1.0,
         "dropout": 0,
-        "module_dropout": 0
+        "module_dropout": 0,
+        "lr": 5e-5
     }
 }

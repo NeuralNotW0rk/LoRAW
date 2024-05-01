@@ -106,11 +106,13 @@ class LoRAWrapper:
         alpha=1.0,
         dropout=None,
         module_dropout=None,
+        lr=None
     ):
         self.target_model = target_model
         self.model_type = model_type
         self.target_blocks = target_blocks
         self.component_whitelist = component_whitelist
+        self.lr = lr
 
         self.is_active = False
         self.is_trainable = False
@@ -144,7 +146,7 @@ class LoRAWrapper:
     def configure_optimizers(self):
         return optim.Adam([*self.residual_modules.parameters()], lr=self.lr)
 
-    def prepare_for_training(self, training_wrapper, lr=None):
+    def prepare_for_training(self, training_wrapper):
         assert self.is_active, "LoRA must be activated before training preparation"
 
         # Freeze target model
@@ -158,12 +160,7 @@ class LoRAWrapper:
         # Move lora to training device
         self.net.to(device=training_wrapper.device)
 
-        # Replace optimizer to use lora parameters
-        if lr is None:
-            # TODO: implement config-based optimizer patching
-            assert False, "config-based optimizers not implemented"
-        else:
-            self.lr = lr
+        # Replace optimizer to use lora parameters TODO: implement more robust lr stuff
         training_wrapper.configure_optimizers = self.configure_optimizers
 
         # Trim ema model if present TODO: generalize beyond diffusion models
@@ -224,6 +221,8 @@ def create_lora_from_config(config, model):
     module_dropout = lora_config.get("module_dropout", None)
     if module_dropout == 0: module_dropout = None
 
+    lr = lora_config.get("lr", None)
+
     lora = LoRAWrapper(
         model,
         model_type=model_type,
@@ -233,7 +232,8 @@ def create_lora_from_config(config, model):
         lora_dim=rank,
         alpha=alpha,
         dropout=dropout,
-        module_dropout=module_dropout
+        module_dropout=module_dropout,
+        lr=lr
     )
 
     return lora
