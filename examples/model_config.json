@@ -127,9 +127,9 @@
         "component_whitelist": ["transformer"],
         "multiplier": 1.0,
         "rank": 16,
-        "alpha": 1.0,
+        "alpha": 16,
         "dropout": 0,
         "module_dropout": 0,
-        "lr": 5e-5
+        "lr": 1e-4
     }
 }
