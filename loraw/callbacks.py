@@ -23,8 +23,9 @@ class LoRAModelCheckpoint(pl.callbacks.ModelCheckpoint):
             for logger in trainer.loggers:
                 logger.after_save_checkpoint(proxy(self))
 
+
 class ReLoRAUpdateCallback(pl.Callback):
-    def __init__(self, lora: LoRAWrapper, update_every=1000):
+    def __init__(self, lora: LoRAWrapper, update_every=1000, **kwargs):
         super().__init__(**kwargs)
         self.lora = lora
         self.update_every = update_every
