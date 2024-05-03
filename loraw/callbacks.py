@@ -31,7 +31,7 @@ class ReLoRAUpdateCallback(pl.Callback):
         self.update_every = update_every
 
     @torch.no_grad()
-    def on_train_batch_end(self, trainer):        
+    def on_train_batch_end(self, trainer, module, outputs, batch, batch_idx):        
         if (trainer.global_step - 1) % self.update_every != 0:
             return
 
