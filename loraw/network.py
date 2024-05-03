@@ -87,11 +87,17 @@ class LoRANetwork(nn.Module):
             module.inject_forward()
         self.active = True
         print(f"Forwarded {len(self.lora_modules)} LoRA modules into model")
+    
+    def update_base(self):
+        for name, module in self.lora_modules.items():
+            module.dump_weights()
+        print(f"Base model weights updated and LoRA modules reinitialized")
 
     def set_multiplier(self, multiplier):
         self.multiplier = multiplier
         for _, module in self.lora_modules.items():
             module.multiplier = self.multiplier
+            
 
 
 class LoRAWrapper:

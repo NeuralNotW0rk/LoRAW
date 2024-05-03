@@ -27,6 +27,10 @@ class LoRAModule(nn.Module):
             alpha = alpha.detach().float().numpy()
         alpha = self.lora_dim if alpha is None or alpha == 0 else alpha
         self.scale = alpha / self.lora_dim
+    
+    def init_weights(self):
+        torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
+        torch.nn.init.zeros_(self.lora_up.weight)
 
     def forward(self, x):
         # module dropout (skip lora module)
@@ -54,6 +58,10 @@ class LoRAModule(nn.Module):
         self.original_module.forward = self.forward
         del self.original_module
 
+    def dump_weights(self):
+        self.original_module.weight += self.lora_up.weight @ self.lora_down.weight * self.scale
+        self.init_weights()
+
 
 class LoRALinear(LoRAModule):
     def __init__(
@@ -79,9 +87,7 @@ class LoRALinear(LoRAModule):
         out_dim = original_module.out_features
         self.lora_down = torch.nn.Linear(in_dim, self.lora_dim, bias=False)
         self.lora_up = torch.nn.Linear(self.lora_dim, out_dim, bias=False)
-
-        torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
-        torch.nn.init.zeros_(self.lora_up.weight)
+        self.init_weights()
 
 
 class LoRAConv1d(LoRAModule):
@@ -113,6 +119,4 @@ class LoRAConv1d(LoRAModule):
             in_dim, self.lora_dim, kernel_size, stride, padding, bias=False
         )
         self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, 1, 1, bias=False)
-
-        torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
-        torch.nn.init.zeros_(self.lora_up.weight)
+        self.init_weights()

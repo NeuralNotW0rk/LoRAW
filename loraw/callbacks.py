@@ -21,3 +21,21 @@ class LoRAModelCheckpoint(pl.callbacks.ModelCheckpoint):
         if trainer.is_global_zero:
             for logger in trainer.loggers:
                 logger.after_save_checkpoint(proxy(self))
+
+class ReLoRAUpdateCallback(pl.Callback):
+    def __init__(self, lora: LoRAWrapper, update_every=1000):
+        super().__init__(**kwargs)
+        self.lora = lora
+        self.update_every = update_every
+
+    @torch.no_grad()
+    def on_train_batch_end(self, trainer):        
+        if (trainer.global_step - 1) % self.update_every != 0:
+            return
+
+        self.lora.net.update_base()
+
+
+
+
+
