@@ -5,7 +5,7 @@ from weakref import proxy
 
 from .network import LoRAWrapper
 
-
+# Save lora weights only
 class LoRAModelCheckpoint(pl.callbacks.ModelCheckpoint):
     def __init__(self, lora: LoRAWrapper, **kwargs):
         super().__init__(**kwargs)
@@ -24,6 +24,13 @@ class LoRAModelCheckpoint(pl.callbacks.ModelCheckpoint):
                 logger.after_save_checkpoint(proxy(self))
 
 
+# Update and save base model
+class ReLoRAModelCheckpoint(pl.callbacks.ModelCheckpoint):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+# Update base model with lora weights (no checkpoint saving)
 class ReLoRAUpdateCallback(pl.Callback):
     def __init__(self, lora: LoRAWrapper, update_every=1000, **kwargs):
         super().__init__(**kwargs)
