@@ -55,11 +55,13 @@ class LoRAModule(nn.Module):
         # Replace original module with lora module
         parent_module._modules[self.lora_name.split("/")[-1]] = self
         # Move original params to lora module
-        self.weight = nn.parameter.Parameter(data=self.original_module.weight.clone().detach())
+        self.weight = nn.parameter.Parameter(data=self.original_module.weight.clone().detach(), requires_grad=False)
         self.original_module.weight = self.weight
 
     def dump_weights(self):
-        self.weight += self.lora_up.weight @ self.lora_down.weight * self.scale
+        updated = self.weight.clone().detach() + self.lora_up.weight.clone().detach() @ self.lora_down.weight.clone().detach() * self.scale
+        self.weight = nn.parameter.Parameter(data=updated, requires_grad=False)
+        self.original_module.weight = self.weight
         self.init_weights()
 
 
