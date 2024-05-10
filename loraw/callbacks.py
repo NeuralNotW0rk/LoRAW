@@ -26,16 +26,16 @@ class LoRAModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
 # Update and save base model
 class ReLoRAModelCheckpoint(pl.callbacks.ModelCheckpoint):
-    def __init__(self, lora: LoRAWrapper, checkpoint_every=1, **kwargs):
+    def __init__(self, lora: LoRAWrapper, checkpoint_every_n_updates=1, **kwargs):
         super().__init__(**kwargs)
         self.lora = lora
-        self.checkpoint_every = checkpoint_every
+        self.checkpoint_every_n_updates = checkpoint_every_n_updates
         self.updates = 0
 
     def _save_checkpoint(self, trainer: "pl.Trainer", filepath: str) -> None:
         self.lora.net.update_base()
 
-        if self.updates % self.checkpoint_every == 0:
+        if self.updates % self.checkpoint_every_n_updates == 0:
             super()._save_checkpoint(trainer, filepath)
 
         self.updates += 1
