@@ -49,7 +49,7 @@ class LoRANetwork(nn.Module):
         target_map,
         multiplier=1.0,
         lora_dim=16,
-        alpha=1.0,
+        alpha=16,
         dropout=None,
         module_dropout=None,
     ):

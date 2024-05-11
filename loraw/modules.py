@@ -52,14 +52,15 @@ class LoRAModule(nn.Module):
         return self.original_forward(x) + lx * self.scale * self.multiplier
 
     def inject(self, parent_module):
+        # Replace original module with lora module
         parent_module._modules[self.lora_name.split("/")[-1]] = self
-
-    def inject_forward(self):
-        self.original_module.forward = self.forward
-        del self.original_module
+        # Move original params to lora module
+        self.weight = nn.Parameter(data=self.original_module.weight.clone().detach(), requires_grad=False)
+        self.original_module.weight = self.weight
 
     def dump_weights(self):
-        self.original_module.weight += self.lora_up.weight @ self.lora_down.weight * self.scale
+        updated = self.weight.clone().detach() + self.lora_up.weight.clone().detach() @ self.lora_down.weight.clone().detach() * self.scale
+        self.weight.data = updated
         self.init_weights()
 
 
