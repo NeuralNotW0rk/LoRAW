@@ -19,7 +19,6 @@ class LoRAModule(nn.Module):
         self.lora_dim = lora_dim
         self.multiplier = multiplier
         self.original_module = original_module
-        self.original_module_q = None
         self.dropout = dropout
         self.module_dropout = module_dropout
 
@@ -49,10 +48,7 @@ class LoRAModule(nn.Module):
         lx = self.lora_up(lx)
 
         # Add scaled residual to original
-        if self.original_module_q is None:
-            return self.original_module(x) + lx * self.scale * self.multiplier
-        else:
-            return self.original_module_q(x) + lx * self.scale * self.multiplier
+        return self.original_module(x) + lx * self.scale * self.multiplier
     
     def inject(self, parent_module):
         # Replace original module with lora module
@@ -62,11 +58,12 @@ class LoRAModule(nn.Module):
         self.original_module.weight = self.weight
             
     def quantize(self):
-        self.original_module_q = torch.ao.quantization.quantize_dynamic(
+        self.original_module = torch.ao.quantization.quantize_dynamic(
             self.original_module,
             {nn.Linear},
             dtype=torch.qint8
         )
+        del self.weight
 
     def dump_weights(self):
         # Update original module weights
@@ -75,7 +72,7 @@ class LoRAModule(nn.Module):
 
         # Reinit lora weights
         self.init_weights()
-        
+
         # Update quantized module if present
         if self.original_module_q is not None:
             self.quantize()
