@@ -150,19 +150,18 @@ class LoRAWrapper:
             self.residual_modules[f"{name}/lora_down"] = module.lora_down
             self.residual_modules[f"{name}/lora_up"] = module.lora_up
 
-    def activate(self):
+    def activate(self, quantize=False):
         assert not self.is_active, "LoRA is already active"
         self.net.activate(self.target_map)
         self.is_active = True
+        if quantize:
+            self.net.quantize_base()
 
     def configure_optimizers(self):
         return optim.Adam([*self.residual_modules.parameters()], lr=self.lr)
 
-    def prepare_for_training(self, training_wrapper, quantize=False):
+    def prepare_for_training(self, training_wrapper):
         assert self.is_active, "LoRA must be activated before training preparation"
-
-        if quantize:
-            self.net.quantize_base()
 
         # Freeze target model
         for param in self.target_model.parameters():
