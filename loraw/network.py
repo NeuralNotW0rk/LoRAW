@@ -51,7 +51,7 @@ class LoRANetwork(nn.Module):
         lora_dim=16,
         alpha=16,
         dropout=None,
-        module_dropout=None,
+        module_dropout=None
     ):
         super().__init__()
         self.active = False
@@ -87,7 +87,12 @@ class LoRANetwork(nn.Module):
             module.inject_forward()
         self.active = True
         print(f"Forwarded {len(self.lora_modules)} LoRA modules into model")
-    
+
+    def quantize_base(self):
+        for _, module in self.lora_modules.items():
+            module.quantize()
+        print(f'Base model weights quantized')
+        
     def update_base(self):
         for name, module in self.lora_modules.items():
             module.dump_weights()
@@ -112,7 +117,8 @@ class LoRAWrapper:
         alpha=1.0,
         dropout=None,
         module_dropout=None,
-        lr=None
+        lr=None,
+        quantize_target=False
     ):
         self.target_model = target_model
         self.model_type = model_type
@@ -152,8 +158,11 @@ class LoRAWrapper:
     def configure_optimizers(self):
         return optim.Adam([*self.residual_modules.parameters()], lr=self.lr)
 
-    def prepare_for_training(self, training_wrapper):
+    def prepare_for_training(self, training_wrapper, quantize=False):
         assert self.is_active, "LoRA must be activated before training preparation"
+
+        if quantize:
+            self.net.quantize_base()
 
         # Freeze target model
         for param in self.target_model.parameters():

@@ -12,14 +12,14 @@ class LoRAModule(nn.Module):
         lora_dim=16,
         alpha=1.0,
         dropout=None,
-        module_dropout=None,
+        module_dropout=None
     ):
         super().__init__()
         self.lora_name = lora_name
         self.lora_dim = lora_dim
         self.multiplier = multiplier
         self.original_module = original_module
-        self.original_forward = original_module.forward
+        self.original_module_q = None
         self.dropout = dropout
         self.module_dropout = module_dropout
 
@@ -33,35 +33,52 @@ class LoRAModule(nn.Module):
         torch.nn.init.zeros_(self.lora_up.weight)
 
     def forward(self, x):
-        # module dropout (skip lora module)
+        # Module dropout (skip lora module)
         if self.module_dropout is not None and self.training:
             if torch.rand(1) < self.module_dropout:
-                return self.original_forward(x)
+                return self.original_module(x)
 
-        # down to low-rank
+        # Down to low-rank
         lx = self.lora_down(x)
 
-        # regular dropout
+        # Regular dropout
         if self.dropout is not None and self.training:
             lx = torch.nn.functional.dropout(lx, p=self.dropout)
 
-        # back up to full-rank
+        # Back up to full-rank
         lx = self.lora_up(lx)
 
-        # add scaled residual to original
-        return self.original_forward(x) + lx * self.scale * self.multiplier
-
+        # Add scaled residual to original
+        if self.original_module_q is None:
+            return self.original_module(x) + lx * self.scale * self.multiplier
+        else:
+            return self.original_module_q(x) + lx * self.scale * self.multiplier
+    
     def inject(self, parent_module):
         # Replace original module with lora module
         parent_module._modules[self.lora_name.split("/")[-1]] = self
         # Move original params to lora module
         self.weight = nn.Parameter(data=self.original_module.weight.clone().detach(), requires_grad=False)
         self.original_module.weight = self.weight
+            
+    def quantize(self):
+        self.original_module_q = torch.ao.quantization.quantize_dynamic(
+            self.original_module,
+            {nn.Linear},
+            dtype=torch.qint8
+        )
 
     def dump_weights(self):
+        # Update original module weights
         updated = self.weight.clone().detach() + self.lora_up.weight.clone().detach() @ self.lora_down.weight.clone().detach() * self.scale
         self.weight.data = updated
+
+        # Reinit lora weights
         self.init_weights()
+        
+        # Update quantized module if present
+        if self.original_module_q is not None:
+            self.quantize()
 
 
 class LoRALinear(LoRAModule):
