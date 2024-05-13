@@ -2,6 +2,8 @@ import math
 import torch
 from torch import nn
 
+import bitsandbytes as bnb
+
 
 class LoRAModule(nn.Module):
     def __init__(
@@ -58,11 +60,10 @@ class LoRAModule(nn.Module):
         #self.original_module.weight = self.weight
             
     def quantize(self):
-        self.original_module = torch.ao.quantization.quantize_dynamic(
-            self.original_module,
-            {nn.Linear},
-            dtype=torch.qint8
-        )
+        original_module_q = bnb.nn.Linear4bit(self.original_module.in_features, self.original_module.out_features, bias=False)
+        original_module_q.load_state_dict(self.original_module.state_dict())
+        original_module_q.to(0)
+        self.original_module = original_module_q
         #del self.weight
 
     def dump_weights(self):
