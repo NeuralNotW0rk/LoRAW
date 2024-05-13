@@ -55,16 +55,6 @@ class LoRAModule(nn.Module):
     def inject(self, parent_module):
         # Replace original module with lora module
         parent_module._modules[self.lora_name.split("/")[-1]] = self
-        # Move original params to lora module
-        #self.weight = nn.Parameter(data=self.original_module.weight.clone().detach(), requires_grad=False)
-        #self.original_module.weight = self.weight
-            
-    def quantize(self):
-        original_module_q = bnb.nn.Linear4bit(self.original_module.in_features, self.original_module.out_features, bias=False)
-        original_module_q.load_state_dict(self.original_module.state_dict())
-        original_module_q.to(0)
-        self.original_module = original_module_q
-        #del self.weight
 
     def dump_weights(self):
         # Update original module weights
@@ -104,6 +94,12 @@ class LoRALinear(LoRAModule):
         self.lora_down = torch.nn.Linear(in_dim, self.lora_dim, bias=False)
         self.lora_up = torch.nn.Linear(self.lora_dim, out_dim, bias=False)
         self.init_weights()
+            
+    def quantize(self):
+        original_module_q = bnb.nn.LinearNF4(self.original_module.in_features, self.original_module.out_features, bias=self.original_module.bias is not None)
+        original_module_q.load_state_dict(self.original_module.state_dict())
+        original_module_q.to(0)
+        self.original_module = original_module_q
 
 
 class LoRAConv1d(LoRAModule):
@@ -136,3 +132,6 @@ class LoRAConv1d(LoRAModule):
         )
         self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, 1, 1, bias=False)
         self.init_weights()
+
+    def quantize(self):
+        return
