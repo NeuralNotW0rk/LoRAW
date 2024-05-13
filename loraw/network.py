@@ -242,9 +242,6 @@ def create_lora_from_config(config, model):
 
     model_type = config["model_type"]
 
-    target_blocks = lora_config.get("target_blocks", None)
-    assert target_blocks is not None, "Must specify target blocks in config"
-
     component_whitelist = lora_config.get("component_whitelist", None)
     assert component_whitelist is not None, "Must specify component whitelist in config"
 
@@ -268,7 +265,6 @@ def create_lora_from_config(config, model):
     lora = LoRAWrapper(
         model,
         model_type=model_type,
-        target_blocks=target_blocks,
         component_whitelist=component_whitelist,
         multiplier=multiplier,
         lora_dim=rank,
