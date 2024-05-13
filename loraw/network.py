@@ -206,7 +206,7 @@ class LoRAWrapper:
         training_wrapper.configure_optimizers = self.configure_optimizers
 
         # Trim ema model if present TODO: generalize beyond diffusion models
-        if self.model_type is not None:
+        if self.model_type is not None and hasattr(training_wrapper.diffusion_ema):
             trim_ema(training_wrapper.diffusion, training_wrapper.diffusion_ema)
 
         self.is_trainable = True
