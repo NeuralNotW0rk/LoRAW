@@ -54,8 +54,8 @@ class LoRAModule(nn.Module):
         # Replace original module with lora module
         parent_module._modules[self.lora_name.split("/")[-1]] = self
         # Move original params to lora module
-        self.weight = nn.Parameter(data=self.original_module.weight.clone().detach(), requires_grad=False)
-        self.original_module.weight = self.weight
+        #self.weight = nn.Parameter(data=self.original_module.weight.clone().detach(), requires_grad=False)
+        #self.original_module.weight = self.weight
             
     def quantize(self):
         self.original_module = torch.ao.quantization.quantize_dynamic(
@@ -63,7 +63,7 @@ class LoRAModule(nn.Module):
             {nn.Linear},
             dtype=torch.qint8
         )
-        del self.weight
+        #del self.weight
 
     def dump_weights(self):
         # Update original module weights
