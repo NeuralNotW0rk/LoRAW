@@ -96,7 +96,7 @@ class LoRALinear(LoRAModule):
         self.init_weights()
             
     def quantize(self):
-        original_module_q = bnb.nn.LinearNF4(self.original_module.in_features, self.original_module.out_features, bias=self.original_module.bias is not None)
+        original_module_q = bnb.nn.Linear4bit(self.original_module.in_features, self.original_module.out_features, bias=self.original_module.bias is not None)
         original_module_q.load_state_dict(self.original_module.state_dict())
         self.original_module = original_module_q
 
