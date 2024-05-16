@@ -183,6 +183,7 @@ class LoRAWrapper:
     def quantize(self):
         assert not self.is_trainable, "Quantization must be performed before training preparation"
         self.net.quantize_base()
+        self.target_model.to(0)
         self.is_quantized = True
 
     def configure_optimizers(self):
