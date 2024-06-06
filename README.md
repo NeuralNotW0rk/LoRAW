@@ -5,30 +5,12 @@ Designed to be used with Stable Audio Tools
 
 Highly experimental still
 
-# Usage
+# Usage (modified train.py)
 
-## Construction
-Create a loraw using the LoRAWrapper class. For example using a conditional diffusion model for which we only want to target the transformer component:
-```Python
-from loraw.network import LoRAWrapper
+## Configure model
 
-lora = LoRAWrapper(
-    target_model,
-    target_blocks=["Attention"],
-    component_whitelist=["transformer"],
-    lora_dim=16,
-    alpha=16,
-    dropout=None,
-    multiplier=1.0
-)
-```
-If using stable-audio-tools, you can create a LoRA based on your model config:
-```Python
-from loraw.network import create_lora_from_config
+Add a `lora` section to your model config i.e.:
 
-lora = create_lora_from_config(model_config, target_model)
-```
-For this to work, you need to add a lora section to the model config. For example:
 ```JSON
 {
     "model_type": "diffusion_cond"
@@ -43,6 +25,50 @@ For this to work, you need to add a lora section to the model config. For exampl
         "lr": 1e-4
     }
 }
+```
+
+## Set additional args
+Set the following command line arguments as needed:
+- `--use_lora`
+    - Set to true to enable lora usage
+    - *Default*: false
+- `--lora_ckpt_path`
+    - A pre-trained lora continue from
+- `--relora_every`
+    - Enables ReLoRA training if set
+    - The number of steps between full-rank updates
+    - *Default*: 0
+- `--quantize`
+    - CURRENTLY BROKEN
+    - Set to true to enable 4-bit quantization of base model for QLoRA training
+    - *Default*: false
+
+Then run `train.py` as you would in [stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools)
+
+## Inference
+Modified `run_gradio.py` coming soon. See manual steps below (setup should be the same but without `prepare_for_training()`)
+
+# Usage (manual)
+
+## Construction
+Create a loraw using the LoRAWrapper class. For example using a conditional diffusion model for which we only want to target the transformer component:
+```Python
+from loraw.network import LoRAWrapper
+
+lora = LoRAWrapper(
+    target_model,
+    component_whitelist=["transformer"],
+    lora_dim=16,
+    alpha=16,
+    dropout=None,
+    multiplier=1.0
+)
+```
+If using stable-audio-tools, you can create a LoRA based on your model config:
+```Python
+from loraw.network import create_lora_from_config
+
+lora = create_lora_from_config(model_config, target_model)
 ```
 
 ## Activation
@@ -64,11 +90,6 @@ For training to work manually, you need to:
 - Set all original weights to `requires_grad = False`
 - Set lora weights set to `requires_grad = True` (easily accessed with `lora.residual_modules.parameters()`)
 - Update the optimizer to use the lora parameters (the same parameters as the previous step)
-
-# Example
-See `examples/train.py` for a modified version of stable audio tool's training script.
-
-Modify your model config as shown above, and use `--use-lora true` when running in CLI to enable
 
 # References
 - https://github.com/cloneofsimo/lora
