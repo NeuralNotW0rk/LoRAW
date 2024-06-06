@@ -7,8 +7,12 @@ Highly experimental still
 
 # Usage (modified train.py)
 
-## Configure model
+Clone this repo, navigate to the root, and run:
+```
+$ pip install .
+```
 
+## Configure model
 Add a `lora` section to your model config i.e.:
 
 ```JSON
