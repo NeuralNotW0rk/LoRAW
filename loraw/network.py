@@ -13,7 +13,34 @@ class TargetableModules(Enum):
     Conv1d = LoRAConv1d
 
 
-def scan_model(model, target_blocks, whitelist=None, blacklist=None):
+def scan_model(model, whitelist=None, blacklist=None):
+    # If a whitelist is specified, modules must have at least one whitelisted ancestor
+    whitelist = set(whitelist) if whitelist is not None else None
+    # If a blacklist is specified, modules must have no blacklisted ancestors
+    blacklist = set(blacklist) if blacklist is not None else None
+    module_map = {}
+    for decendant_name, decendant_module in model.named_modules():
+        if decendant_module.__class__.__name__ in TargetableModules.__members__:
+            ancestor_set = set(decendant_name.split("."))
+            if (
+                (whitelist is None or not ancestor_set.isdisjoint(whitelist))
+                and (blacklist is None or ancestor_set.isdisjoint(blacklist))
+            ):
+                # Get parent if child is not a direct decendant
+                ancestor_module = model
+                for name in decendant_name.split(".")[:-1]:
+                    ancestor_module = ancestor_module._modules[name]
+                # Since '.' is not allowed, replace with '/' (makes it look like a path)
+                id = decendant_name.replace(".", "/")
+                module_map[id] = {
+                    "module": decendant_module,
+                    "parent": ancestor_module,
+                }
+    print(f"Found {len(module_map)} candidates for LoRA replacement")
+    return module_map
+
+    
+def scan_model_by_block(model, target_blocks, whitelist=None, blacklist=None):
     # Find all targetable modules that are in targeted blocks
     target_blocks = set(target_blocks)
     # If a whitelist is specified, modules must have at least one whitelisted ancestor
@@ -51,7 +78,7 @@ class LoRANetwork(nn.Module):
         lora_dim=16,
         alpha=16,
         dropout=None,
-        module_dropout=None,
+        module_dropout=None
     ):
         super().__init__()
         self.active = False
@@ -87,7 +114,12 @@ class LoRANetwork(nn.Module):
             module.inject_forward()
         self.active = True
         print(f"Forwarded {len(self.lora_modules)} LoRA modules into model")
-    
+
+    def quantize_base(self):
+        for _, module in self.lora_modules.items():
+            module.quantize()
+        print(f'Base model weights quantized')
+        
     def update_base(self):
         for name, module in self.lora_modules.items():
             module.dump_weights()
@@ -99,33 +131,31 @@ class LoRANetwork(nn.Module):
             module.multiplier = self.multiplier
             
 
-
 class LoRAWrapper:
     def __init__(
         self,
         target_model,
         model_type=None,
-        target_blocks=["Attention"],
         component_whitelist=None,
         multiplier=1.0,
         lora_dim=16,
         alpha=1.0,
         dropout=None,
         module_dropout=None,
-        lr=None
+        lr=None,
     ):
         self.target_model = target_model
         self.model_type = model_type
-        self.target_blocks = target_blocks
         self.component_whitelist = component_whitelist
         self.lr = lr
 
         self.is_active = False
         self.is_trainable = False
+        self.is_quantized = False
 
         # Gather candidates for replacement
         self.target_map = scan_model(
-            target_model, target_blocks, whitelist=component_whitelist
+            target_model, whitelist=component_whitelist
         )
 
         # Construct LoRA network
@@ -148,6 +178,12 @@ class LoRAWrapper:
         assert not self.is_active, "LoRA is already active"
         self.net.activate(self.target_map)
         self.is_active = True
+    
+    def quantize(self):
+        assert not self.is_trainable, "Quantization must be performed before training preparation"
+        self.net.quantize_base()
+        self.target_model.to('cuda')
+        self.is_quantized = True
 
     def configure_optimizers(self):
         return optim.Adam([*self.residual_modules.parameters()], lr=self.lr)
@@ -170,7 +206,7 @@ class LoRAWrapper:
         training_wrapper.configure_optimizers = self.configure_optimizers
 
         # Trim ema model if present TODO: generalize beyond diffusion models
-        if self.model_type is not None:
+        if hasattr(training_wrapper, 'diffusion_ema') and training_wrapper.diffusion_ema is not None:
             trim_ema(training_wrapper.diffusion, training_wrapper.diffusion_ema)
 
         self.is_trainable = True
@@ -206,9 +242,6 @@ def create_lora_from_config(config, model):
 
     model_type = config["model_type"]
 
-    target_blocks = lora_config.get("target_blocks", None)
-    assert target_blocks is not None, "Must specify target blocks in config"
-
     component_whitelist = lora_config.get("component_whitelist", None)
     assert component_whitelist is not None, "Must specify component whitelist in config"
 
@@ -232,7 +265,6 @@ def create_lora_from_config(config, model):
     lora = LoRAWrapper(
         model,
         model_type=model_type,
-        target_blocks=target_blocks,
         component_whitelist=component_whitelist,
         multiplier=multiplier,
         lora_dim=rank,

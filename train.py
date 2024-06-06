@@ -12,7 +12,8 @@ from stable_audio_tools.training import create_training_wrapper_from_config, cre
 from stable_audio_tools.training.utils import copy_state_dict
 
 from loraw.network import create_lora_from_config
-from loraw.callbacks import LoRAModelCheckpoint
+from loraw.callbacks import LoRAModelCheckpoint, ReLoRAModelCheckpoint
+from pytorch_lightning.plugins import BitsandbytesPrecisionPlugin
 
 class ExceptionCallback(pl.Callback):
     def on_exception(self, trainer, module, err):
@@ -55,9 +56,6 @@ def main():
     )
 
     model = create_model_from_config(model_config)
-    # LORA: Create loras
-    if args.use_lora == 'true':
-        lora = create_lora_from_config(model_config, model)
 
     if args.pretrained_ckpt_path:
         copy_state_dict(model, load_ckpt_state_dict(args.pretrained_ckpt_path))
@@ -72,8 +70,9 @@ def main():
     if args.remove_pretransform_weight_norm == "post_load":
         remove_weight_norm_from_model(model.pretransform)
 
-    # LORA: Activate
+    # LORA: Create and activate
     if args.use_lora == 'true':
+        lora = create_lora_from_config(model_config, model)
         if args.lora_ckpt_path:
             lora.residual_modules.load_state_dict(
                 torch.load(args.lora_ckpt_path, map_location="cpu")["state_dict"]
@@ -89,7 +88,9 @@ def main():
     wandb_logger = pl.loggers.WandbLogger(project=args.name)
     wandb_logger.watch(training_wrapper)
 
-    exc_callback = ExceptionCallback()
+    callbacks = []
+
+    callbacks.append(ExceptionCallback())
     
     if args.save_dir and isinstance(wandb_logger.experiment.id, str):
         checkpoint_dir = os.path.join(args.save_dir, wandb_logger.experiment.project, wandb_logger.experiment.id, "checkpoints") 
@@ -98,12 +99,16 @@ def main():
 
     # LORA: Custom checkpoint callback
     if args.use_lora  == 'true':
-        ckpt_callback = LoRAModelCheckpoint(lora=lora, every_n_train_steps=args.checkpoint_every, dirpath=checkpoint_dir, save_top_k=-1)
+        if args.relora_every == 0:
+            callbacks.append(LoRAModelCheckpoint(lora=lora, every_n_train_steps=args.checkpoint_every, dirpath=checkpoint_dir, save_top_k=-1))
+        else:
+            callbacks.append(ReLoRAModelCheckpoint(lora=lora, every_n_train_steps=args.relora_every, dirpath=checkpoint_dir, save_top_k=-1, checkpoint_every_n_updates=args.checkpoint_every // args.relora_every))
     else:  
-        ckpt_callback = pl.callbacks.ModelCheckpoint(every_n_train_steps=args.checkpoint_every, dirpath=checkpoint_dir, save_top_k=-1)
-    save_model_config_callback = ModelConfigEmbedderCallback(model_config)
+        callbacks.append(pl.callbacks.ModelCheckpoint(every_n_train_steps=args.checkpoint_every, dirpath=checkpoint_dir, save_top_k=-1))
 
-    demo_callback = create_demo_callback_from_config(model_config, demo_dl=train_dl)
+    callbacks.append(ModelConfigEmbedderCallback(model_config))
+
+    callbacks.append(create_demo_callback_from_config(model_config, demo_dl=train_dl))
 
     #Combine args and config dicts
     args_dict = vars(args)
@@ -128,21 +133,40 @@ def main():
     else:
         strategy = 'ddp_find_unused_parameters_true' if args.num_gpus > 1 else "auto" 
 
-    trainer = pl.Trainer(
-        devices=args.num_gpus,
-        accelerator="gpu",
-        num_nodes = args.num_nodes,
-        strategy=strategy,
-        precision=args.precision,
-        accumulate_grad_batches=args.accum_batches, 
-        callbacks=[ckpt_callback, demo_callback, exc_callback, save_model_config_callback],
-        logger=wandb_logger,
-        log_every_n_steps=1,
-        max_epochs=10000000,
-        default_root_dir=args.save_dir,
-        gradient_clip_val=args.gradient_clip_val,
-        reload_dataloaders_every_n_epochs = 0
-    )
+
+    if args.quantize == 'true':
+        plugins = BitsandbytesPrecisionPlugin(mode="nf4", dtype=torch.float16, ignore_modules={*lora.residual_modules})
+        trainer = pl.Trainer(
+            devices=args.num_gpus,
+            accelerator="gpu",
+            num_nodes = args.num_nodes,
+            strategy=strategy,
+            plugins=plugins,
+            accumulate_grad_batches=args.accum_batches, 
+            callbacks=callbacks,
+            logger=wandb_logger,
+            log_every_n_steps=1,
+            max_epochs=10000000,
+            default_root_dir=args.save_dir,
+            gradient_clip_val=args.gradient_clip_val,
+            reload_dataloaders_every_n_epochs = 0,
+        )
+    else:
+        trainer = pl.Trainer(
+            devices=args.num_gpus,
+            accelerator="gpu",
+            num_nodes = args.num_nodes,
+            strategy=strategy,
+            precision=args.precision,
+            accumulate_grad_batches=args.accum_batches, 
+            callbacks=callbacks,
+            logger=wandb_logger,
+            log_every_n_steps=1,
+            max_epochs=10000000,
+            default_root_dir=args.save_dir,
+            gradient_clip_val=args.gradient_clip_val,
+            reload_dataloaders_every_n_epochs = 0,
+        )
 
     trainer.fit(training_wrapper, train_dl, ckpt_path=args.ckpt_path if args.ckpt_path else None)
 

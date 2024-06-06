@@ -7,14 +7,7 @@ setup(
     author='Griffin Page',
     packages=find_packages(),    
     install_requires=[
-        'einops',
-        'pandas',
-        'prefigure', 
-        'pytorch_lightning',
-        'scipy',
-        'torch',
-        'torchaudio',
-        'tqdm',
-        'wandb',
+        'stable_audio_tools',
+        'bitsandbytes'
     ],
 )

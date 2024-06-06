@@ -6,4 +6,5 @@ wandb
 torch
 torchaudio
 pytorch_lightning
-git+https://github.com/diontimmer/sample-diffusion-lib
+stable_audio_tools
+bitsandbytes

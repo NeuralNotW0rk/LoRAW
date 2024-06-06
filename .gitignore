@@ -6,3 +6,5 @@ __pycache__/
 *.wav
 *.ckpt
 *.egg-info/
+/build
+train_local.bat
