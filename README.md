@@ -34,7 +34,6 @@ For this to work, you need to add a lora section to the model config. For exampl
     "model_type": "diffusion_cond"
     // ... args, model, training, etc. ...
     "lora": {
-        "target_blocks": ["Attention"],
         "component_whitelist": ["transformer"],
         "multiplier": 1.0,
         "rank": 16,

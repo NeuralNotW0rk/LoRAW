@@ -64,10 +64,6 @@ class LoRAModule(nn.Module):
         # Reinit lora weights
         self.init_weights()
 
-        # Update quantized module if present
-        if self.original_module_q is not None:
-            self.quantize()
-
 
 class LoRALinear(LoRAModule):
     def __init__(

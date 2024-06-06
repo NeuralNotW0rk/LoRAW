@@ -6,4 +6,5 @@ wandb
 torch
 torchaudio
 pytorch_lightning
+stable_audio_tools
 bitsandbytes

@@ -1,6 +1,6 @@
 {
     "model_type": "diffusion_cond",
-    "sample_size": 441000,
+    "sample_size": 2097152,
     "sample_rate": 44100,
     "audio_channels": 2,
     "model": {
@@ -110,20 +110,19 @@
             }
         },
         "demo": {
-            "demo_every": 50,
+            "demo_every": 2000,
             "demo_steps": 250,
             "num_demos": 4,
             "demo_cond": [
-                {"prompt": "Amen break 174 BPM", "seconds_start": 0, "seconds_total": 10},
-                {"prompt": "A beautiful orchestral symphony, classical music", "seconds_start": 0, "seconds_total": 10},
-                {"prompt": "Loops, Bass", "seconds_start": 0, "seconds_total": 10},
-                {"prompt": "Glitch noises", "seconds_start": 0, "seconds_total": 10}
+                {"prompt": "Amen break 174 BPM", "seconds_start": 0, "seconds_total": 12},
+                {"prompt": "A beautiful orchestral symphony, classical music", "seconds_start": 0, "seconds_total": 160},
+                {"prompt": "Chill hip-hop beat, chillhop", "seconds_start": 0, "seconds_total": 190},
+                {"prompt": "A pop song about love and loss", "seconds_start": 0, "seconds_total": 180}
             ],
             "demo_cfg_scales": [3, 6, 9]
         }
     },
     "lora": {
-        "target_blocks": ["Attention"],
         "component_whitelist": ["transformer"],
         "multiplier": 1.0,
         "rank": 16,
