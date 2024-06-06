@@ -7,3 +7,4 @@ __pycache__/
 *.ckpt
 *.egg-info/
 /build
+train_local.bat
