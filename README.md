@@ -28,7 +28,7 @@ Add a `lora` section to your model config i.e.:
 ```
 
 ## Set additional args
-Set the following command line arguments as needed:
+Then run the modified `train.py` as you would in [stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools) with the following command line arguments as needed:
 - `--use_lora`
     - Set to true to enable lora usage
     - *Default*: false
@@ -43,10 +43,12 @@ Set the following command line arguments as needed:
     - Set to true to enable 4-bit quantization of base model for QLoRA training
     - *Default*: false
 
-Then run `train.py` as you would in [stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools)
+
 
 ## Inference
-Modified `run_gradio.py` coming soon. See manual steps below (setup should be the same but without `prepare_for_training()`)
+Run the modified `run_gradio.py` as you would in [stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools) with the following command line argument:
+- `--lora_ckpt_path`
+    - Your trained lora checkpoint
 
 # Usage (manual)
 
