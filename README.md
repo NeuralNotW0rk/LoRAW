@@ -51,7 +51,7 @@ Then run the modified `train.py` as you would in [stable-audio-tools](https://gi
 
 ## Inference
 Run the modified `run_gradio.py` as you would in [stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools) with the following command line argument:
-- `--lora_ckpt_path`
+- `--lora-ckpt-path`
     - Your trained lora checkpoint
 
 # Usage (manual)
