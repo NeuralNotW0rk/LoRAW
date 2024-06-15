@@ -33,12 +33,12 @@ Add a `lora` section to your model config i.e.:
 
 ## Set additional args
 Then run the modified `train.py` as you would in [stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools) with the following command line arguments as needed:
-- `--use_lora`
+- `--use-lora`
     - Set to true to enable lora usage
     - *Default*: false
-- `--lora_ckpt_path`
+- `--lora-ckpt-path`
     - A pre-trained lora continue from
-- `--relora_every`
+- `--relora-every`
     - Enables ReLoRA training if set
     - The number of steps between full-rank updates
     - *Default*: 0
@@ -51,7 +51,7 @@ Then run the modified `train.py` as you would in [stable-audio-tools](https://gi
 
 ## Inference
 Run the modified `run_gradio.py` as you would in [stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools) with the following command line argument:
-- `--lora_ckpt_path`
+- `--lora-ckpt-path`
     - Your trained lora checkpoint
 
 # Usage (manual)

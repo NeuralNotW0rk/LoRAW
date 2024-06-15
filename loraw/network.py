@@ -139,7 +139,7 @@ class LoRAWrapper:
         component_whitelist=None,
         multiplier=1.0,
         lora_dim=16,
-        alpha=1.0,
+        alpha=16,
         dropout=None,
         module_dropout=None,
         lr=None,
@@ -214,16 +214,14 @@ class LoRAWrapper:
     def save_weights(self, path, dtype=torch.float16):
         torch.save(self.residual_modules.state_dict(), path)
 
-    def load_weights(self, path):
-        weights = torch.load(path, map_location="cpu")
-        info = self.residual_modules.load_state_dict(weights, False)
+    def load_weights(self, residual_weights):
+        info = self.residual_modules.load_state_dict(residual_weights, False)
         return info
 
-    def merge_weights(self, path, multiplier=1.0):
-        weights = torch.load(path, map_location="cpu")
-        for name, weight in weights.items():
+    def merge_weights(self, residual_weights, multiplier=1.0):
+        for name, weight in residual_weights.items():
             param = self.residual_modules.state_dict()[name]
-            param.copy_(param + weight * multiplier)
+            param.copy_(param + residual_weights * multiplier)
 
     def extract_diff(self, tuned_model):
         lora_weights = calculate_svds(

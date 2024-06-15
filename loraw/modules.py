@@ -12,7 +12,7 @@ class LoRAModule(nn.Module):
         original_module: nn.Module,
         multiplier=1.0,
         lora_dim=16,
-        alpha=1.0,
+        alpha=16,
         dropout=None,
         module_dropout=None
     ):
@@ -58,8 +58,8 @@ class LoRAModule(nn.Module):
 
     def dump_weights(self):
         # Update original module weights
-        updated = self.weight.clone().detach() + self.lora_up.weight.clone().detach() @ self.lora_down.weight.clone().detach() * self.scale
-        self.weight.data = updated
+        updated = self.original_module.weight.clone().detach() + self.lora_up.weight.clone().detach() @ self.lora_down.weight.clone().detach() * self.scale
+        self.original_module.weight.data = updated
 
         # Reinit lora weights
         self.init_weights()
@@ -72,7 +72,7 @@ class LoRALinear(LoRAModule):
         original_module: nn.Module,
         multiplier=1,
         lora_dim=16,
-        alpha=1,
+        alpha=16,
         dropout=None,
         module_dropout=None,
     ):
@@ -104,7 +104,7 @@ class LoRAConv1d(LoRAModule):
         original_module: nn.Module,
         multiplier=1,
         lora_dim=16,
-        alpha=1,
+        alpha=16,
         dropout=None,
         module_dropout=None,
     ):
