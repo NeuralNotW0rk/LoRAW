@@ -61,7 +61,7 @@ def load_model(model_config=None, model_ckpt_path=None, lora_ckpt_path=None, pre
         lora.activate()
 
         print(f"Loading lora checkpoint from {lora_ckpt_path}")
-        lora.load_weights(lora_ckpt_path)
+        lora.load_weights(torch.load(lora_ckpt_path, map_location="cpu"))
 
         lora.net.to(device).eval().requires_grad_(False)
 

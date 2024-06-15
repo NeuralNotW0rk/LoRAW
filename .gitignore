@@ -5,6 +5,6 @@ checkpoints/
 __pycache__/
 *.wav
 *.ckpt
+*.bat
 *.egg-info/
 /build
-train_local.bat
