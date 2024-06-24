@@ -78,7 +78,8 @@ class LoRANetwork(nn.Module):
         lora_dim=16,
         alpha=16,
         dropout=None,
-        module_dropout=None
+        module_dropout=None,
+        decompose=False
     ):
         super().__init__()
         self.active = False
@@ -101,6 +102,7 @@ class LoRANetwork(nn.Module):
                 alpha=alpha,
                 dropout=dropout,
                 module_dropout=module_dropout,
+                decompose=decompose
             )
 
     def activate(self, target_map):
@@ -142,6 +144,7 @@ class LoRAWrapper:
         alpha=16,
         dropout=None,
         module_dropout=None,
+        decompose=False,
         lr=None,
     ):
         self.target_model = target_model
@@ -166,6 +169,7 @@ class LoRAWrapper:
             alpha=alpha,
             dropout=dropout,
             module_dropout=module_dropout,
+            decompose=decompose
         )
 
         # Get a list of bottom-level lora modules, excluding the originals

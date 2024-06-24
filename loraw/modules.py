@@ -28,10 +28,17 @@ class LoRAModule(nn.Module):
             alpha = alpha.detach().float().numpy()
         alpha = self.lora_dim if alpha is None or alpha == 0 else alpha
         self.scale = alpha / self.lora_dim
+
+        self.dora_mag = None
     
     def init_weights(self):
+        # Initialize up and down the established way
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
         torch.nn.init.zeros_(self.lora_up.weight)
+
+        # Set dora magnitude to that of the original module weight
+        if self.dora_mag is not None:
+            self.dora_mag.weight.data = (torch.linalg.norm(self.original_module.weight.detach(), dim=1)).unsqueeze(1).detach()
 
     def forward(self, x):
         # Module dropout (skip lora module)
@@ -50,16 +57,27 @@ class LoRAModule(nn.Module):
         lx = self.lora_up(lx)
 
         # Add scaled residual to original
-        return self.original_module(x) + lx * self.scale * self.multiplier
-    
+        lx = self.original_module(x) + lx * self.scale * self.multiplier
+
+        # Return regular lora result
+        if self.dora_mag is None:
+            return lx
+        
+        # Calculate V + dV for dora scaling
+        new_weight_v = self.original_module.weight + (self.lora_up.weight @ self.lora_down.weight) * self.scale
+        # m / ||V + dV||, Note: ||V + dV|| is detached to prevent gradent calculation
+        norm_scale = self.dora_mag.weight.view(-1) / (torch.linalg.norm(new_weight_v, dim=1)).detach()
+        # m / ||V + dV|| * (xV + xdV)
+        return norm_scale * lx
+
     def inject(self, parent_module):
         # Replace original module with lora module
         parent_module._modules[self.lora_name.split("/")[-1]] = self
 
     def dump_weights(self):
         # Update original module weights
-        updated = self.original_module.weight.clone().detach() + self.lora_up.weight.clone().detach() @ self.lora_down.weight.clone().detach() * self.scale
-        self.original_module.weight.data = updated
+        updated = self.original_module.weight + (self.lora_up.weight @ self.lora_down.weight) * self.scale
+        self.original_module.weight.data = updated.clone().detach()
 
         # Reinit lora weights
         self.init_weights()
@@ -75,6 +93,7 @@ class LoRALinear(LoRAModule):
         alpha=16,
         dropout=None,
         module_dropout=None,
+        decompose=False
     ):
         super().__init__(
             lora_name,
@@ -89,6 +108,8 @@ class LoRALinear(LoRAModule):
         out_dim = original_module.out_features
         self.lora_down = torch.nn.Linear(in_dim, self.lora_dim, bias=False)
         self.lora_up = torch.nn.Linear(self.lora_dim, out_dim, bias=False)
+        if decompose:
+            self.dora_mag = torch.nn.Linear(1, out_dim)
         self.init_weights()
             
     def quantize(self):
@@ -107,6 +128,7 @@ class LoRAConv1d(LoRAModule):
         alpha=16,
         dropout=None,
         module_dropout=None,
+        decompose=False
     ):
         super().__init__(
             lora_name,
@@ -126,6 +148,9 @@ class LoRAConv1d(LoRAModule):
             in_dim, self.lora_dim, kernel_size, stride, padding, bias=False
         )
         self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, 1, 1, bias=False)
+        if decompose:
+            # TODO: Implement conv1d dora rescaling
+            pass
         self.init_weights()
 
     def quantize(self):
