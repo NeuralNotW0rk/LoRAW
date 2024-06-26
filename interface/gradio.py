@@ -18,7 +18,7 @@ from stable_audio_tools.models.utils import load_ckpt_state_dict
 from stable_audio_tools.inference.utils import prepare_audio
 from stable_audio_tools.training.utils import copy_state_dict
 
-from loraw.network import create_lora_from_config
+from loraw.network import LoRAWrapper
 
 model = None
 sample_rate = 32000
@@ -56,7 +56,7 @@ def load_model(model_config=None, model_ckpt_path=None, lora_ckpt_path=None, pre
     print(f"Done loading model")
 
     if lora_ckpt_path is not None:
-        lora = create_lora_from_config(model_config, model)
+        lora = LoRAWrapper(model, component_whitelist=['transformer'])
 
         lora.activate()
 

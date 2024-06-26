@@ -74,6 +74,11 @@ class LoRAModule(nn.Module):
         # Replace original module with lora module
         parent_module._modules[self.lora_name.split("/")[-1]] = self
 
+    def inject_forward(self):
+        # Replace original module's forward method with lora forward
+        self.original_forward = self.original_module.forward
+        self.original_module.forward = self.forward
+
     def dump_weights(self):
         # Update original module weights
         updated = self.original_module.weight + (self.lora_up.weight @ self.lora_down.weight) * self.scale
@@ -104,12 +109,19 @@ class LoRALinear(LoRAModule):
             dropout,
             module_dropout,
         )
-        in_dim = original_module.in_features
-        out_dim = original_module.out_features
-        self.lora_down = torch.nn.Linear(in_dim, self.lora_dim, bias=False)
-        self.lora_up = torch.nn.Linear(self.lora_dim, out_dim, bias=False)
+        self.in_dim = original_module.in_features
+        self.out_dim = original_module.out_features
+        self.lora_dim = min(self.lora_dim, self.in_dim, self.out_dim)
+        self.lora_down = torch.nn.Linear(self.in_dim, self.lora_dim, bias=False)
+        self.lora_up = torch.nn.Linear(self.lora_dim, self.out_dim, bias=False)
         if decompose:
-            self.dora_mag = torch.nn.Linear(1, out_dim)
+            self.dora_mag = torch.nn.Linear(1, self.out_dim)
+        self.init_weights()
+
+    def resize(self, lora_dim):
+        self.lora_dim = lora_dim
+        self.lora_down = torch.nn.Linear(self.in_dim, self.lora_dim, bias=False)
+        self.lora_up = torch.nn.Linear(self.lora_dim, self.out_dim, bias=False)
         self.init_weights()
             
     def quantize(self):

@@ -129,6 +129,7 @@
         "alpha": 16,
         "dropout": 0,
         "module_dropout": 0,
-        "lr": 1e-4
+        "lr": 1e-4,
+        "weight_decompose": true
     }
 }

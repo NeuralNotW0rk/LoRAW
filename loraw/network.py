@@ -3,9 +3,12 @@ from torch import nn
 from torch import optim
 from enum import Enum
 
+from stable_audio_tools.models.utils import load_ckpt_state_dict
+
 from .modules import LoRALinear, LoRAConv1d
 from .util import *
 from .attributes import *
+
 
 
 class TargetableModules(Enum):
@@ -177,6 +180,8 @@ class LoRAWrapper:
         for name, module in self.net.lora_modules.items():
             self.residual_modules[f"{name}/lora_down"] = module.lora_down
             self.residual_modules[f"{name}/lora_up"] = module.lora_up
+            if module.dora_mag is not None:
+                self.residual_modules[f"{name}/dora_mag"] = module.dora_mag
 
     def activate(self):
         assert not self.is_active, "LoRA is already active"
@@ -218,9 +223,19 @@ class LoRAWrapper:
     def save_weights(self, path, dtype=torch.float16):
         torch.save(self.residual_modules.state_dict(), path)
 
-    def load_weights(self, residual_weights):
-        info = self.residual_modules.load_state_dict(residual_weights, False)
-        return info
+    def load_weights(self, residual_weights, multiplier=1.0):
+        resized = 0
+        for key, weight in residual_weights.items():
+            if key.endswith('lora_down.weight'):
+                rank = weight.size(0)
+            elif key.endswith('lora_up.weight'):
+                rank = weight.size(1)
+            module = self.net.lora_modules['/'.join(key.split('/')[:-1])]
+            if module.lora_dim != rank:
+                module.resize(rank)
+                resized += 1
+            self.residual_modules[key.split('.')[0]].weight.data = (weight * multiplier).detach()
+        print(f'{resized} LoRA modules resized')
 
     def merge_weights(self, residual_weights, multiplier=1.0):
         for name, weight in residual_weights.items():
@@ -229,15 +244,58 @@ class LoRAWrapper:
 
     def extract_diff(self, tuned_model):
         lora_weights = calculate_svds(
-            self.net.lora_modules,
+            self.target_model,
             tuned_model,
             self.net.lora_modules.keys(),
-            rank=self.net.lora_dim,
+            lora_dim=self.net.lora_dim,
         )
         for name, (down_weight, up_weight) in lora_weights.items():
-            self.residual_modules[f"{name}/lora_down"].weight.copy_(down_weight)
-            self.residual_modules[f"{name}/lora_up"].weight.copy_(up_weight)
+            self.residual_modules[f"{name}/lora_down"].weight.data = down_weight.detach()
+            self.residual_modules[f"{name}/lora_up"].weight.data = up_weight.detach()
 
+
+class LoRAMerger:
+    def __init__(
+        self,
+        target_model,
+        model_type=None,
+        component_whitelist=None
+    ):
+        self.target_model = target_model
+        self.model_type = model_type
+        self.component_whitelist = component_whitelist
+
+        # Gather candidates for replacement
+        self.target_map = scan_model(
+            target_model, whitelist=component_whitelist
+        )
+
+        self.backup = {name: module.weight.data.detach().to('cpu') for name, module in self.target_map.items()}
+
+        self.lora_paths = {}
+
+    def add_lora(self, name, path):
+        self.lora_dicts[name] = path
+        print(f'LoRA registered: {name}')
+
+    def merge(self, lora_multipliers=None):
+        # If no multipliers specified, set all to 1.0
+        if lora_multipliers is None:
+            lora_multipliers = {name: 1.0 for name in self.lora_dicts.keys()}
+
+        for lora_name, mul in lora_multipliers.items():
+            state_dict = load_ckpt_state_dict(self.lora_paths[lora_name])
+        
+
+    
+    def restore(self):
+        for name, module in self.target_map:
+            module.weight.data = self.backup[name].clone().detach().to(self.target_model.device)
+        print('Base model weights restored from backup')
+    
+
+
+    
 
 def create_lora_from_config(config, model):
     lora_config = config["lora"]
@@ -264,6 +322,8 @@ def create_lora_from_config(config, model):
 
     lr = lora_config.get("lr", None)
 
+    weight_decompose = lora_config.get("weight_decompose", False)
+
     lora = LoRAWrapper(
         model,
         model_type=model_type,
@@ -273,7 +333,8 @@ def create_lora_from_config(config, model):
         alpha=alpha,
         dropout=dropout,
         module_dropout=module_dropout,
-        lr=lr
+        lr=lr,
+        decompose=weight_decompose
     )
 
     return lora
