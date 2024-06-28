@@ -4,6 +4,7 @@ import gradio as gr
 import json 
 import torch
 import torchaudio
+import os
 
 from aeiou.viz import audio_spectrogram_image
 from einops import rearrange
@@ -18,14 +19,14 @@ from stable_audio_tools.models.utils import load_ckpt_state_dict
 from stable_audio_tools.inference.utils import prepare_audio
 from stable_audio_tools.training.utils import copy_state_dict
 
-from loraw.network import create_lora_from_config
+from loraw.network import LoRAMerger
 
 model = None
 sample_rate = 32000
 sample_size = 1920000
 
-def load_model(model_config=None, model_ckpt_path=None, lora_ckpt_path=None, pretrained_name=None, pretransform_ckpt_path=None, device="cuda", model_half=False):
-    global model, sample_rate, sample_size
+def load_model(model_config=None, model_ckpt_path=None, pretrained_name=None, pretransform_ckpt_path=None, device="cuda", model_half=False):
+    global model, sample_rate, sample_size, lora_merger
     
     if pretrained_name is not None:
         print(f"Loading pretrained model {pretrained_name}")
@@ -55,15 +56,8 @@ def load_model(model_config=None, model_ckpt_path=None, lora_ckpt_path=None, pre
         
     print(f"Done loading model")
 
-    if lora_ckpt_path is not None:
-        lora = create_lora_from_config(model_config, model)
-
-        lora.activate()
-
-        print(f"Loading lora checkpoint from {lora_ckpt_path}")
-        lora.load_weights(torch.load(lora_ckpt_path, map_location="cpu"))
-
-        lora.net.to(device).eval().requires_grad_(False)
+    lora_merger = LoRAMerger(model, component_whitelist=['transformer'])
+    lora_merger.net.to(device).eval().requires_grad_(False)
 
     return model, model_config
 
@@ -83,6 +77,9 @@ def generate_cond(
         use_init=False,
         init_audio=None,
         init_noise_level=1.0,
+        lora1=0.0,
+        lora2=0.0,
+        lora3=0.0,
         mask_cropfrom=None,
         mask_pastefrom=None,
         mask_pasteto=None,
@@ -91,7 +88,7 @@ def generate_cond(
         mask_softnessL=None,
         mask_softnessR=None,
         mask_marination=None,
-        batch_size=1    
+        batch_size=1,
     ):
 
     if torch.cuda.is_available():
@@ -173,7 +170,9 @@ def generate_cond(
             "marination": mask_marination,
         }
     else:
-        mask_args = None 
+        mask_args = None
+
+    lora_merger.merge({lora_names[0]: lora1, lora_names[1]: lora2, lora_names[2]: lora3})
 
     # Do the audio generation
     audio = generate_diffusion_cond(
@@ -196,6 +195,8 @@ def generate_cond(
         callback = progress_callback if preview_every is not None else None,
         scale_phi = cfg_rescale
     )
+
+    lora_merger.restore()
 
     # Convert to WAV file
     audio = rearrange(audio, "b d n -> d (b n)")
@@ -501,7 +502,13 @@ def create_sampling_ui(model_config, inpainting=False):
                         init_audio_input,
                         init_noise_level_slider
                     ]
-
+                
+            with gr.Accordion("LoRAs", open=False):
+                global lora_names
+                lora_sliders = []
+                for lora in lora_names:
+                    lora_sliders.append(gr.Slider(minimum=0.0, maximum=1.0, step=0.1, value=0.0, label=lora))
+                
         with gr.Column():
             audio_output = gr.Audio(label="Output audio", interactive=False)
             audio_spectrogram_output = gr.Gallery(label="Output spectrogram", show_label=False)
@@ -509,7 +516,7 @@ def create_sampling_ui(model_config, inpainting=False):
             send_to_init_button.click(fn=lambda audio: audio, inputs=[audio_output], outputs=[init_audio_input])
     
     generate_button.click(fn=generate_cond, 
-        inputs=inputs,
+        inputs=inputs + lora_sliders,
         outputs=[
             audio_output, 
             audio_spectrogram_output
@@ -666,7 +673,7 @@ def create_lm_ui(model_config):
 
     return ui
 
-def create_ui(model_config_path=None, ckpt_path=None, lora_ckpt_path=None, pretrained_name=None, pretransform_ckpt_path=None, model_half=False):
+def create_ui(model_config_path=None, ckpt_path=None, lora_dir=None, pretrained_name=None, pretransform_ckpt_path=None, model_half=False):
 
     assert (pretrained_name is not None) ^ (model_config_path is not None and ckpt_path is not None), "Must specify either pretrained name or provide a model config and checkpoint, but not both"
 
@@ -678,9 +685,16 @@ def create_ui(model_config_path=None, ckpt_path=None, lora_ckpt_path=None, pretr
         model_config = None
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    _, model_config = load_model(model_config, ckpt_path, lora_ckpt_path=lora_ckpt_path, pretrained_name=pretrained_name, pretransform_ckpt_path=pretransform_ckpt_path, model_half=model_half, device=device)
+    _, model_config = load_model(model_config, ckpt_path, pretrained_name=pretrained_name, pretransform_ckpt_path=pretransform_ckpt_path, model_half=model_half, device=device)
     
     model_type = model_config["model_type"]
+
+    global lora_names
+    lora_names = []
+    for file in os.listdir(lora_dir):
+        if file.endswith('.ckpt'):
+            lora_names.append(file[:-5])
+            lora_merger.register(file[:-5], os.path.join(lora_dir, file))
 
     if model_type == "diffusion_cond":
         ui = create_txt2audio_ui(model_config)
