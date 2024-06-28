@@ -16,20 +16,18 @@ $ pip install .
 Add a `lora` section to your model config i.e.:
 
 ```JSON
-{
-    "model_type": "diffusion_cond"
-    // ... args, model, training, etc. ...
-    "lora": {
-        "component_whitelist": ["transformer"],
-        "multiplier": 1.0,
-        "rank": 16,
-        "alpha": 16,
-        "dropout": 0,
-        "module_dropout": 0,
-        "lr": 1e-4
-    }
+"lora": {
+    "component_whitelist": ["transformer"],
+    "multiplier": 1.0,
+    "rank": 16,
+    "alpha": 16,
+    "dropout": 0,
+    "module_dropout": 0,
+    "lr": 1e-4
 }
 ```
+
+A full example config that works with stable audio open can be found [here](https://github.com/NeuralNotW0rk/LoRAW/blob/main/examples/model_config.json)
 
 ## Set additional args
 Then run the modified `train.py` as you would in [stable-audio-tools](https://github.com/Stability-AI/stable-audio-tools) with the following command line arguments as needed:
