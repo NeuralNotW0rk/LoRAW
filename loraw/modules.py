@@ -14,7 +14,8 @@ class LoRAModule(nn.Module):
         lora_dim=16,
         alpha=16,
         dropout=None,
-        module_dropout=None
+        module_dropout=None,
+        decompose=False
     ):
         super().__init__()
         self.lora_name = lora_name
@@ -30,6 +31,8 @@ class LoRAModule(nn.Module):
         self.scale = alpha / self.lora_dim
 
         self.dora_mag = None
+        if decompose:
+            self.dora_mag = torch.nn.Linear(1, self.out_dim)
     
     def init_weights(self):
         # Initialize up and down the established way
@@ -93,29 +96,18 @@ class LoRALinear(LoRAModule):
         self,
         lora_name,
         original_module: nn.Module,
-        multiplier=1,
-        lora_dim=16,
-        alpha=16,
-        dropout=None,
-        module_dropout=None,
-        decompose=False
+        **kwargs
     ):
         super().__init__(
             lora_name,
             original_module,
-            multiplier,
-            lora_dim,
-            alpha,
-            dropout,
-            module_dropout,
+            **kwargs
         )
         self.in_dim = original_module.in_features
         self.out_dim = original_module.out_features
         self.lora_dim = min(self.lora_dim, self.in_dim, self.out_dim)
         self.lora_down = torch.nn.Linear(self.in_dim, self.lora_dim, bias=False)
         self.lora_up = torch.nn.Linear(self.lora_dim, self.out_dim, bias=False)
-        if decompose:
-            self.dora_mag = torch.nn.Linear(1, self.out_dim)
         self.init_weights()
 
     def resize(self, lora_dim):
@@ -135,35 +127,24 @@ class LoRAConv1d(LoRAModule):
         self,
         lora_name,
         original_module: nn.Module,
-        multiplier=1,
-        lora_dim=16,
-        alpha=16,
-        dropout=None,
-        module_dropout=None,
-        decompose=False
+        **kwargs
     ):
         super().__init__(
             lora_name,
             original_module,
-            multiplier,
-            lora_dim,
-            alpha,
-            dropout,
-            module_dropout,
+            **kwargs
         )
         in_dim = original_module.in_channels
         out_dim = original_module.out_channels
         kernel_size = original_module.kernel_size
         stride = original_module.stride
         padding = original_module.padding
-        self.lora_down = torch.nn.Conv1d(
-            in_dim, self.lora_dim, kernel_size, stride, padding, bias=False
-        )
+        self.lora_down = torch.nn.Conv1d(in_dim, self.lora_dim, kernel_size, stride, padding, bias=False)
         self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, 1, 1, bias=False)
-        if decompose:
-            # TODO: Implement conv1d dora rescaling
-            pass
         self.init_weights()
+
+    def resize(self, lora_dim):
+        return
 
     def quantize(self):
         return

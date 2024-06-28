@@ -1,4 +1,5 @@
 import torch
+import gc
 from torch import nn
 from torch import optim
 from enum import Enum
@@ -182,6 +183,7 @@ class LoRAWrapper:
             self.residual_modules[f"{name}/lora_up"] = module.lora_up
             if module.dora_mag is not None:
                 self.residual_modules[f"{name}/dora_mag"] = module.dora_mag
+        print(self.residual_modules)
 
     def activate(self):
         assert not self.is_active, "LoRA is already active"
@@ -220,23 +222,47 @@ class LoRAWrapper:
 
         self.is_trainable = True
 
+    # Saves residual weights
     def save_weights(self, path, dtype=torch.float16):
         torch.save(self.residual_modules.state_dict(), path)
 
+    # Loads any saved residual weights, changing structure as needed
+    # Note: if loading correctly shaped weights, you can directly use LoRAWrapper.residual_modules.load_state_dict()
     def load_weights(self, residual_weights, multiplier=1.0):
-        resized = 0
+        # Group entries by lora module
+        grouped = {}
         for key, weight in residual_weights.items():
-            if key.endswith('lora_down.weight'):
-                rank = weight.size(0)
-            elif key.endswith('lora_up.weight'):
-                rank = weight.size(1)
-            module = self.net.lora_modules['/'.join(key.split('/')[:-1])]
+            ancestors = key.split('/')
+            lora_name = '/'.join(ancestors[:-1])
+            module_name = ancestors[-1].split('.')[0]
+            weights = grouped.get(lora_name, {})
+            weights[module_name] = weight
+            grouped[lora_name] = weights
+
+        # Update weights
+        for lora_name, weights in grouped.items():
+            module = self.net.lora_modules[lora_name]
+            is_dora = 'dora_mag' in weights
+
+            # Resize up and down if needed
+            rank = weights['lora_down'].size(0)
             if module.lora_dim != rank:
                 module.resize(rank)
-                resized += 1
-            self.residual_modules[key.split('.')[0]].weight.data = (weight * multiplier).detach()
-        print(f'{resized} LoRA modules resized')
 
+            # Update up and down
+            lora_multiplier = 1.0 if is_dora else multiplier
+            module.lora_down.weight.data = (weights['lora_down'] * lora_multiplier).detach()
+            module.lora_up.weight.data = (weights['lora_up'] * lora_multiplier).detach()
+
+            # Handle DoRA magnitude
+            if is_dora:
+                if module.dora_mag is None:
+                    module.dora_mag = torch.nn.Linear(1, module.out_dim)
+                module.dora_mag.weight.data = (weights['lora_down'] * multiplier).detach()
+            else:
+                module.dora_mag = None
+
+    # Simple merge implementation for same-shaped loras
     def merge_weights(self, residual_weights, multiplier=1.0):
         for name, weight in residual_weights.items():
             param = self.residual_modules.state_dict()[name]
@@ -253,48 +279,37 @@ class LoRAWrapper:
             self.residual_modules[f"{name}/lora_down"].weight.data = down_weight.detach()
             self.residual_modules[f"{name}/lora_up"].weight.data = up_weight.detach()
 
-
-class LoRAMerger:
+class LoRAMerger(LoRAWrapper):
     def __init__(
         self,
         target_model,
-        model_type=None,
-        component_whitelist=None
+        **kwargs
     ):
-        self.target_model = target_model
-        self.model_type = model_type
-        self.component_whitelist = component_whitelist
-
-        # Gather candidates for replacement
-        self.target_map = scan_model(
-            target_model, whitelist=component_whitelist
-        )
-
-        self.backup = {name: module.weight.data.detach().to('cpu') for name, module in self.target_map.items()}
-
+        super().__init__(target_model, **kwargs)
+        self.backup = {name: module.original_module.weight.data.clone().detach().to('cpu') for name, module in self.net.lora_modules.items()}
         self.lora_paths = {}
 
-    def add_lora(self, name, path):
-        self.lora_dicts[name] = path
+    def register(self, name, path):
+        self.lora_paths[name] = path
         print(f'LoRA registered: {name}')
 
     def merge(self, lora_multipliers=None):
         # If no multipliers specified, set all to 1.0
         if lora_multipliers is None:
-            lora_multipliers = {name: 1.0 for name in self.lora_dicts.keys()}
+            lora_multipliers = {name: 1.0 for name in self.lora_paths.keys()}
 
         for lora_name, mul in lora_multipliers.items():
-            state_dict = load_ckpt_state_dict(self.lora_paths[lora_name])
-        
+            if mul > 0:
+                self.load_weights(torch.load(self.lora_paths[lora_name]), multiplier=mul)
+                self.net.update_base()
+                print(f'{lora_name} merged with strength {mul}')
 
-    
     def restore(self):
-        for name, module in self.target_map:
-            module.weight.data = self.backup[name].clone().detach().to(self.target_model.device)
+        for name, module in self.net.lora_modules.items():
+            module.original_module.weight.data = self.backup[name].clone().detach().to('cuda')
+        gc.collect()
+        torch.cuda.empty_cache()
         print('Base model weights restored from backup')
-    
-
-
     
 
 def create_lora_from_config(config, model):
