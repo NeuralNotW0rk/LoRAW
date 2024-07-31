@@ -183,7 +183,6 @@ class LoRAWrapper:
             self.residual_modules[f"{name}/lora_up"] = module.lora_up
             if module.dora_mag is not None:
                 self.residual_modules[f"{name}/dora_mag"] = module.dora_mag
-        print(self.residual_modules)
 
     def activate(self):
         assert not self.is_active, "LoRA is already active"

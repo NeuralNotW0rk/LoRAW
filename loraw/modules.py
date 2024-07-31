@@ -31,9 +31,8 @@ class LoRAModule(nn.Module):
         self.scale = alpha / self.lora_dim
 
         self.dora_mag = None
-        if decompose:
-            self.dora_mag = torch.nn.Linear(1, self.out_dim)
-    
+
+
     def init_weights(self):
         # Initialize up and down the established way
         torch.nn.init.kaiming_uniform_(self.lora_down.weight, a=math.sqrt(5))
@@ -96,6 +95,7 @@ class LoRALinear(LoRAModule):
         self,
         lora_name,
         original_module: nn.Module,
+        decompose,
         **kwargs
     ):
         super().__init__(
@@ -108,6 +108,9 @@ class LoRALinear(LoRAModule):
         self.lora_dim = min(self.lora_dim, self.in_dim, self.out_dim)
         self.lora_down = torch.nn.Linear(self.in_dim, self.lora_dim, bias=False)
         self.lora_up = torch.nn.Linear(self.lora_dim, self.out_dim, bias=False)
+        if decompose:
+            self.dora_mag = torch.nn.Linear(1, self.out_dim)
+    
         self.init_weights()
 
     def resize(self, lora_dim):
@@ -127,6 +130,7 @@ class LoRAConv1d(LoRAModule):
         self,
         lora_name,
         original_module: nn.Module,
+        decompose,
         **kwargs
     ):
         super().__init__(
@@ -141,6 +145,9 @@ class LoRAConv1d(LoRAModule):
         padding = original_module.padding
         self.lora_down = torch.nn.Conv1d(in_dim, self.lora_dim, kernel_size, stride, padding, bias=False)
         self.lora_up = torch.nn.Conv1d(self.lora_dim, out_dim, 1, 1, bias=False)
+        if decompose:
+            self.dora_mag = torch.nn.Linear(1, self.out_dim)
+    
         self.init_weights()
 
     def resize(self, lora_dim):
