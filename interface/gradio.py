@@ -25,6 +25,8 @@ model = None
 sample_rate = 32000
 sample_size = 1920000
 
+max_loras = 3
+
 def load_model(model_config=None, model_ckpt_path=None, pretrained_name=None, pretransform_ckpt_path=None, device="cuda", model_half=False):
     global model, sample_rate, sample_size, lora_merger
     
@@ -158,6 +160,7 @@ def generate_cond(
 
     # If inpainting, send mask args
     # This will definitely change in the future
+    '''
     if mask_cropfrom is not None: 
         mask_args = {
             "cropfrom": mask_cropfrom,
@@ -170,9 +173,19 @@ def generate_cond(
             "marination": mask_marination,
         }
     else:
-        mask_args = None
+    '''
+    mask_args = None
 
-    lora_merger.merge({lora_names[0]: lora1, lora_names[1]: lora2, lora_names[2]: lora3})
+    merge_dict = {}
+    n_loras = len(lora_names)
+    if n_loras >= 1:
+        merge_dict[lora_names[0]] = lora1
+    if n_loras >= 2:
+        merge_dict[lora_names[1]] = lora2
+    if n_loras >= 3:
+        merge_dict[lora_names[2]] = lora3
+
+    lora_merger.merge(merge_dict)
 
     # Do the audio generation
     audio = generate_diffusion_cond(
@@ -506,8 +519,8 @@ def create_sampling_ui(model_config, inpainting=False):
             with gr.Accordion("LoRAs", open=False):
                 global lora_names
                 lora_sliders = []
-                for lora in lora_names:
-                    lora_sliders.append(gr.Slider(minimum=0.0, maximum=1.0, step=0.1, value=0.0, label=lora))
+                for i in range(min(max_loras, len(lora_names))):
+                    lora_sliders.append(gr.Slider(minimum=0.0, maximum=1.0, step=0.1, value=0.0, label=lora_names[i]))
                 
         with gr.Column():
             audio_output = gr.Audio(label="Output audio", interactive=False)
