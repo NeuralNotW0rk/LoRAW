@@ -75,7 +75,7 @@ def main():
         lora = create_lora_from_config(model_config, model)
         if args.lora_ckpt_path:
             lora.load_weights(
-                torch.load(args.lora_ckpt_path, map_location="cpu")["state_dict"]
+                torch.load(args.lora_ckpt_path, map_location="cuda:0")
             )
         lora.activate()
 
